@@ -64,7 +64,7 @@ def main():
         start = round(i * (duration / n), 3)
         end = round((i + 1) * (duration / n), 3)
         cues.append({
-            "paragraphId": p.get("id", f"ru-{i:06d}"),
+            "paragraphId": p.get("id", f"ru-{i+1:06d}"),
             "start": start,
             "end": end,
         })
