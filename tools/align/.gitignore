@@ -1,0 +1,15 @@
+
+# Python virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Temporary alignment outputs
+*.tmp
+*.log
+
+# Model downloads (if you later use WhisperX)
+.cache/
+

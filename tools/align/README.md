@@ -11,3 +11,8 @@ args: --audio audio/01.mp3 --ru ru.json --out cues/01.json
 
 WhisperX/stable-ts/aeneas/MFA CLIs
 
+
+python align.py <bookId> <segmentId> <audio.mp3> <ru.json> <output.json>
+
+python align.py pushkin_kd s001 audio/s001.mp3 ru.json cues/s001.json
+
