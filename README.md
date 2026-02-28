@@ -1,7 +1,7 @@
 
 
 
-
+```
 cyrillic-reader/
   web/                 # static webapp (JS/TS)
   tools/
@@ -12,5 +12,5 @@ cyrillic-reader/
   books/               # optional: curated manifests/metadata
   shared/              # schemas, constants, utilities (optional)
   README.md
-
+```
 
