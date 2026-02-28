@@ -29,7 +29,7 @@ cyrillic-reader/
 ```
 
 
-translit output:
+russian translit and paragraphing output:
 ```
 {
   "lang": "ru",
@@ -43,6 +43,30 @@ translit output:
       "id": "ru-000002",
       "cyr": "Спустя несколько дней после сего знаменитого совета, узнали мы, что Пугачев, верный своему обещанию, приближился к Оренбургу. ...",
       "lat": "Spustja neskolʹko dnej posle sego znamenitogo soveta, uznali my, čto Pugačëv, vernyj svoemu obeščaniju, priblizilsja k Orenburgu. ..."
+    }
+  ]
+}
+```
+
+
+english paragraphing output:
+
+
+```
+{
+  "lang": "en",
+  "paragraphs": [
+    {
+      "id": "en-000001",
+      "text": "The officials in their turn looked at me with mockery. The council dispersed. I could not help regretting the weakness of the venerable warrior who, contrary to his own conviction, resolved to follow the opinions of inexperienced and ignorant men."
+    },
+    {
+      "id": "en-000002",
+      "text": "A few days after this celebrated council we learned that Pugachev, faithful to his promise, had approached Orenburg. From the height of the city wall I saw the army of the rebels. It seemed to me that their number had increased tenfold since the last assault of which I had been a witness."
+    },
+    {
+      "id": "en-000003",
+      "text": "I shall not describe the siege of Orenburg, which belongs to history and not to family memoirs. I will only say briefly that this siege, through the imprudence of the local authorities, was disastrous for the inhabitants, who endured hunger and every possible misery."
     }
   ]
 }
