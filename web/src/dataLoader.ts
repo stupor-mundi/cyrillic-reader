@@ -1,33 +1,39 @@
 import type { RuJson, EnJson, ChunksJson, CuesJson } from "./types";
 
-export async function loadChapter(
-  bookId: string,
-  chapterId: string
-): Promise<{
+export interface AudioSegment {
+  id: string;
+  title?: string;
+  audioFile: string;
+  cuesFile: string;
+}
+
+export interface AudioIndexJson {
+  bookId: string;
+  segments: AudioSegment[];
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export async function loadBook(bookId: string): Promise<{
   ru: RuJson;
   en: EnJson;
   chunks: ChunksJson;
-  cues: CuesJson;
+  audioIndex: AudioIndexJson;
   ruToChunk: Map<string, string>;
 }> {
-  const dir = `/data/${bookId}/chapters/${chapterId}`;
+  const base = `/data/${bookId}`;
 
-  const [ruRes, enRes, chunksRes, cuesRes] = await Promise.all([
-    fetch(`${dir}/ru.json`),
-    fetch(`${dir}/en.json`),
-    fetch(`${dir}/chunks.json`),
-    fetch(`${dir}/cues.json`),
-  ]);
-
-  if (!ruRes.ok || !enRes.ok || !chunksRes.ok || !cuesRes.ok) {
-    throw new Error("Failed to fetch chapter data");
-  }
-
-  const [ru, en, chunks, cues] = await Promise.all([
-    ruRes.json() as Promise<RuJson>,
-    enRes.json() as Promise<EnJson>,
-    chunksRes.json() as Promise<ChunksJson>,
-    cuesRes.json() as Promise<CuesJson>,
+  const [ru, en, chunks, audioIndex] = await Promise.all([
+    fetchJson<RuJson>(`${base}/ru.json`),
+    fetchJson<EnJson>(`${base}/en.json`),
+    fetchJson<ChunksJson>(`${base}/chunks.json`),
+    fetchJson<AudioIndexJson>(`${base}/audio_index.json`),
   ]);
 
   const ruToChunk = new Map<string, string>();
@@ -37,5 +43,13 @@ export async function loadChapter(
     }
   }
 
-  return { ru, en, chunks, cues, ruToChunk };
+  return { ru, en, chunks, audioIndex, ruToChunk };
+}
+
+export async function loadSegmentCues(
+  bookId: string,
+  segmentId: string
+): Promise<CuesJson> {
+  const url = `/data/${bookId}/cues/${segmentId}.json`;
+  return fetchJson<CuesJson>(url);
 }
