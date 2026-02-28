@@ -14,3 +14,19 @@ cyrillic-reader/
   README.md
 ```
 
+
+
+
+
+
+```
+{
+  "bookId": "pushkin_kd",
+  "paragraphs": [
+    { "id": "p000001", "cyr": "...", "lat": "..." },
+    { "id": "p000002", "cyr": "...", "lat": "..." }
+  ]
+}
+```
+
+
