@@ -1,0 +1,58 @@
+################################################
+# DATA (generated + large files)
+################################################
+
+data/
+*.mp3
+*.m4b
+*.wav
+*.flac
+*.ogg
+*.vtt
+*.srt
+*.json
+
+# If you want to keep schemas or example JSON,
+# move them to shared/ and remove *.json above.
+
+
+################################################
+# JAVA / MAVEN (translit tool)
+################################################
+
+# Maven build output
+target/
+
+# IntelliJ
+.idea/
+*.iml
+out/
+
+# Logs
+*.log
+
+
+################################################
+# NODE / WEB
+################################################
+
+node_modules/
+dist/
+build/
+.next/
+.vite/
+coverage/
+
+
+################################################
+# OS / EDITOR
+################################################
+
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+
+
