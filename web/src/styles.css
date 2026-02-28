@@ -1,0 +1,30 @@
+#app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+  font-family: Georgia, "Times New Roman", serif;
+  line-height: 1.6;
+}
+
+.chunk {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.chunk + .chunk {
+  margin-top: 0.5rem;
+}
+
+.col {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0.25rem;
+}
+
+.col.lat {
+  font-size: 0.9em;
+  color: #666;
+}
