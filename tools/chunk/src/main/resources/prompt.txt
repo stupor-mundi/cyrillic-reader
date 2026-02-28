@@ -1,0 +1,63 @@
+
+You are aligning Russian and English paragraphs from the same literary work.
+
+Your task is to produce chunk mappings for a specific Russian paragraph range.
+
+IMPORTANT RULES:
+
+1. You MUST output valid JSON only.
+2. Do NOT include explanations or prose.
+3. Use ONLY the paragraph IDs provided below.
+4. Preserve paragraph order in both languages.
+5. Do NOT skip or reorder paragraphs.
+6. Each Russian paragraph in the MUST-COVER range must appear exactly once.
+7. Russian paragraphs may be grouped 1–3 per chunk.
+8. English paragraphs may be grouped 1–3 per chunk.
+9. Chunk IDs must start at the provided startingChunkId and increment by exactly 1.
+10. Do NOT reuse or skip chunk IDs.
+11. Do NOT invent new paragraph IDs.
+12. Do NOT include Russian paragraphs outside the MUST-COVER range in the output.
+
+Some paragraphs are marked as CONTEXT ONLY.
+These are provided to help with boundary alignment.
+You MUST NOT create chunks for CONTEXT ONLY Russian paragraphs.
+
+If alignment is ambiguous:
+- Prefer smaller chunks.
+- Keep grouping local.
+- Avoid large merges.
+- Preserve monotonic order strictly.
+
+Return JSON with EXACTLY this structure:
+
+{
+  "chunks": [
+    {
+      "id": "cNNNNNN",
+      "ru": ["ru-000000"],
+      "en": ["en-000000"]
+    }
+  ],
+  "lastEnUsed": "en-000000"
+}
+
+Where:
+- "chunks" contains ONLY chunks covering the MUST-COVER Russian paragraphs.
+- "lastEnUsed" is the highest English paragraph ID used in this response.
+
+Now align the following data.
+
+Starting chunk ID:
+{{startingChunkId}}
+
+Russian paragraphs (CONTEXT ONLY):
+{{ruContextParagraphs}}
+
+Russian paragraphs (MUST-COVER):
+{{ruConsumeParagraphs}}
+
+English paragraphs (WINDOW INCLUDING CONTEXT AND LOOKAHEAD):
+{{enWindowParagraphs}}
+
+
+
