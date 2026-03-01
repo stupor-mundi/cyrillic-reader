@@ -28,11 +28,11 @@ import java.util.Set;
 public class Main {
 
     // Hardcoded defaults for v1
-    private static final int RU_CONSUME = 80;
+    private static final int RU_CONSUME = 60;
     private static final int RU_OVERLAP = 10;
     private static final int EN_START_OVERLAP = 15;
-    private static final int EN_LOOKAHEAD = 150;
-    private static final String MODEL = "claude-3-5-sonnet-latest";
+    private static final int EN_LOOKAHEAD = 120;
+    private static final String MODEL = "claude-sonnet-4-6";
     private static final int MAX_TOKENS = 4000;
 
     private static final String ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
