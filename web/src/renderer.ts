@@ -23,6 +23,8 @@ export function renderChapter(
 
   for (const chunk of data.chunks.chunks) {
     const chunkDiv = document.createElement("div");
+    chunkDiv.dataset.chunkId = chunk.id;
+    chunkDiv.id = `chunk-${chunk.id}`;
     chunkDiv.className = "chunk";
 
     const cyrCol = document.createElement("div");
@@ -43,4 +45,8 @@ export function renderChapter(
     chunkDiv.append(cyrCol, latCol, enCol);
     container.appendChild(chunkDiv);
   }
+}
+
+export function getChunkElementById(chunkId: string): HTMLElement | null {
+  return document.getElementById(`chunk-${chunkId}`);
 }
