@@ -27,3 +27,15 @@ This approach allows the final chunks.json to be assembled incrementally and det
 }
 ```
 
+java -jar chunker.jar <bookId> <ru.json> <en.json> <outChunks.json>
+
+
+claude returns:
+
+{
+  "chunks": [
+    { "id":"c000001", "ru":["ru-000001"], "en":["en-000001"] }
+  ],
+  "lastEnUsed": "en-000012"
+}
+
