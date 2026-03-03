@@ -161,6 +161,7 @@ public class Main {
                     enPtr,
                     producedChunks
             );
+
             windowIndex++;
         }
 
@@ -330,7 +331,9 @@ public class Main {
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
 
-        HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+//        HttpResponse<String> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        HttpResponse<String> response = sendWith429Retry(request);
 
         if (response.statusCode() != 200) {
             throw new IllegalStateException("Anthropic API returned status " + response.statusCode() + ": " + response.body());
@@ -531,6 +534,22 @@ public class Main {
             return -1;
         }
     }
+
+    private static HttpResponse<String> sendWith429Retry(HttpRequest request) throws IOException, InterruptedException {
+        int attempt = 0;
+        while (true) {
+            HttpResponse<String> resp = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (resp.statusCode() != 429) {
+                return resp;
+            }
+            attempt++;
+            // Exponential backoff: 15s, 30s, 60s, then cap at 60s
+            long sleepMs = Math.min(60_000L, 15_000L * (1L << Math.min(attempt - 1, 2)));
+            System.err.println("Rate limited (429). Sleeping " + (sleepMs / 1000) + "s then retrying...");
+            Thread.sleep(sleepMs);
+        }
+    }
+
 
     // Data classes
 
