@@ -149,6 +149,19 @@ public class Main {
             segment.startParagraph = startParagraph.id;
             segment.endParagraph = endParagraph.id;
 
+            // contentStartParagraph = first paragraph after chapter marker, or startParagraph if none
+            int contentStartIndex = startIndex + 1;
+            if (contentStartIndex > endIndex) {
+                segment.contentStartParagraph = startParagraph.id;
+                if (startIndex == paragraphs.size() - 1) {
+                    System.err.println("Warning: chapter marker at paragraph '" + startParagraph.id + "' is the final paragraph of the book");
+                } else {
+                    System.err.println("Warning: chapter marker at paragraph '" + startParagraph.id + "' is immediately followed by another chapter marker");
+                }
+            } else {
+                segment.contentStartParagraph = paragraphs.get(contentStartIndex).id;
+            }
+
             segments.add(segment);
         }
 
@@ -182,6 +195,7 @@ public class Main {
         public String title;
         public String audioFile;
         public String startParagraph;
+        public String contentStartParagraph;
         public String endParagraph;
     }
 
