@@ -1,6 +1,7 @@
 import { loadBook, loadSegmentCues } from "./dataLoader";
 import { renderChapter, getChunkElementById } from "./renderer";
 import { attachAudioSync } from "./audioSync";
+import "./styles.css";
 
 document.addEventListener("DOMContentLoaded", () => {
   void (async () => {
