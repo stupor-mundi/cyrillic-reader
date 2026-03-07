@@ -115,7 +115,7 @@ def _align_paragraphs_to_words(
 
     search_pos = 0
     n_words = len(flat_words)
-    window_size = 50
+    window_size = 300
 
     for p in slice_paragraphs:
         pid = p.get("id")
