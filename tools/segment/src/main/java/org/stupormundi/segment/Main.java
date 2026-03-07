@@ -117,7 +117,9 @@ public class Main {
         for (int i = 0; i < paragraphs.size(); i++) {
             Paragraph p = paragraphs.get(i);
             String cyr = p.cyr;
-            if (cyr != null && cyr.stripLeading().startsWith("Глава")) {
+
+            String normalized = cyr == null ? "" : cyr.stripLeading().toLowerCase();
+            if (normalized.startsWith("глава")) {
                 chapterStartIndices.add(i);
             }
         }
