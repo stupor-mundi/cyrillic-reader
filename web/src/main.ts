@@ -37,7 +37,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      container.parentElement?.insertBefore(audio, container);
+
+      const audioBar = document.createElement("div");
+      audioBar.id = "audio-bar";
+      audioBar.appendChild(audio);
+      document.body.insertBefore(audioBar, document.body.firstChild);
+
 
       attachAudioSync({
         audio,
