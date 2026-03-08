@@ -28,7 +28,9 @@ import java.util.Set;
 public class Main {
 
     // Hardcoded defaults for v1
-    private static final int RU_CONSUME = 60;
+    private static final int RU_CONSUME_TARGET = 60;
+    private static final int RU_CONSUME_MIN = 55;
+    private static final int RU_CONSUME_MAX = 65;
     private static final int RU_OVERLAP = 10;
     private static final int EN_START_OVERLAP = 15;
     private static final int EN_LOOKAHEAD = 120;
@@ -102,6 +104,7 @@ public class Main {
         }
 
         Map<String, Integer> enIndexById = buildEnIndex(enBook.paragraphs);
+        Map<String, Integer> ruIndexById = buildRuIndex(ruBook.paragraphs);
 
         List<Chunk> allChunks = new ArrayList<>();
 
@@ -112,8 +115,8 @@ public class Main {
 
         while (ruPtr < ruBook.paragraphs.size()) {
             int remainingRu = ruBook.paragraphs.size() - ruPtr;
-            int ruConsumeCount = Math.min(RU_CONSUME, remainingRu);
-            List<RuParagraph> ruConsume = ruBook.paragraphs.subList(ruPtr, ruPtr + ruConsumeCount);
+            int ruCandidatesCount = Math.min(RU_CONSUME_MAX, remainingRu);
+            List<RuParagraph> ruCandidates = ruBook.paragraphs.subList(ruPtr, ruPtr + ruCandidatesCount);
 
             int ruContextStart = Math.max(0, ruPtr - RU_OVERLAP);
             List<RuParagraph> ruContext = ruBook.paragraphs.subList(ruContextStart, ruPtr);
@@ -124,13 +127,15 @@ public class Main {
 
             String startingChunkId = formatChunkId(nextChunkNumeric);
 
-            String basePrompt = buildPrompt(startingChunkId, ruContext, ruConsume, enWindow);
+            int windowRuStart = ruPtr;
+
+            String basePrompt = buildPrompt(startingChunkId, ruContext, ruCandidates, enWindow);
 
             ChunkWindowResponse response = callAnthropicWithValidation(
                     apiKey,
                     basePrompt,
                     startingChunkId,
-                    ruConsume,
+                    ruCandidates,
                     enWindow,
                     enIndexById
             );
@@ -145,7 +150,12 @@ public class Main {
             nextChunkNumeric += producedChunks;
 
             // Advance pointers
-            ruPtr += ruConsumeCount;
+            Integer lastIdx = ruIndexById.get(response.lastRuCovered);
+            if (lastIdx == null) {
+                throw new IllegalStateException("lastRuCovered '" + response.lastRuCovered + "' not found in ru index.");
+            }
+            int coveredCount = lastIdx - windowRuStart + 1;
+            ruPtr = lastIdx + 1;
             if (response.lastEnUsed != null && !response.lastEnUsed.isBlank()) {
                 Integer idx = enIndexById.get(response.lastEnUsed);
                 if (idx != null) {
@@ -153,13 +163,14 @@ public class Main {
                 }
             }
 
-            int ruHumanStart = ruPtr - ruConsumeCount + 1;
-            int ruHumanEnd = ruPtr;
+            int ruHumanStart = windowRuStart + 1;
+            int ruHumanEnd = lastIdx + 1;
             System.err.printf(
-                    "Window %d: ru %d-%d, enPtr=%d, chunks=%d%n",
+                    "Window %d: ru %d-%d (covered %d), enPtr=%d, chunks=%d%n",
                     windowIndex,
                     ruHumanStart,
                     ruHumanEnd,
+                    coveredCount,
                     enPtr,
                     producedChunks
             );
@@ -202,6 +213,20 @@ public class Main {
         return index;
     }
 
+    private static Map<String, Integer> buildRuIndex(List<RuParagraph> paragraphs) {
+        Map<String, Integer> index = new HashMap<>();
+        for (int i = 0; i < paragraphs.size(); i++) {
+            RuParagraph p = paragraphs.get(i);
+            if (p.id == null || p.id.isBlank()) {
+                throw new IllegalStateException("ru paragraph at index " + i + " has empty id.");
+            }
+            if (index.put(p.id, i) != null) {
+                throw new IllegalStateException("Duplicate ru id detected: " + p.id);
+            }
+        }
+        return index;
+    }
+
     private static String formatChunkId(int numeric) {
         return String.format("c%06d", numeric);
     }
@@ -212,7 +237,7 @@ public class Main {
     static String buildPrompt(
             String startingChunkId,
             List<RuParagraph> ruContext,
-            List<RuParagraph> ruConsume,
+            List<RuParagraph> ruCandidates,
             List<EnParagraph> enWindow
     ) {
         StringBuilder sb = new StringBuilder();
@@ -221,9 +246,9 @@ public class Main {
                 You are a strict JSON-only segmentation engine.
 
                 Task:
-                - Segment the Russian MUST-COVER paragraphs into aligned chunks.
+                - Segment the Russian CANDIDATES paragraphs into aligned chunks.
                 - Each chunk must reference:
-                  - One or more Russian paragraph IDs from the MUST-COVER list.
+                  - One or more Russian paragraph IDs from the CANDIDATES list.
                   - Zero or more English paragraph IDs from the English window.
 
                 Output format (JSON ONLY, no extra text, no comments, no code fences):
@@ -235,14 +260,17 @@ public class Main {
                       "en": ["en-000003", "en-000004"]
                     }
                   ],
-                  "lastEnUsed": "en-000004"
+                  "lastEnUsed": "en-000004",
+                  "lastRuCovered": "ru-000062"
                 }
 
                 Rules:
                 - Use chunk IDs starting from the provided starting chunk ID and increment sequentially by 1.
-                - Use ONLY Russian paragraph IDs from the Russian MUST-COVER section (not from CONTEXT ONLY).
-                - Every Russian MUST-COVER paragraph ID must appear in exactly one chunk (no omissions, no duplicates).
-                - Do NOT introduce any Russian IDs that are not listed in the MUST-COVER section.
+                - Use ONLY Russian paragraph IDs from the Russian CANDIDATES section (not from CONTEXT ONLY).
+                - Cover between 55 and 65 Russian paragraphs, stopping at the most natural semantic boundary within that range.
+                - Report the last Russian paragraph ID you covered in "lastRuCovered".
+                - Every Russian paragraph you include in any chunk must be covered sequentially without gaps from the first candidate paragraph.
+                - Do NOT introduce any Russian IDs that are not listed in the CANDIDATES section.
                 - Use ONLY English paragraph IDs from the English window section.
                 - English paragraph IDs must appear in non-decreasing order as they occur in the book.
                 - lastEnUsed must be exactly the English paragraph ID with the largest numeric suffix among all used English IDs.
@@ -265,8 +293,8 @@ public class Main {
         }
         sb.append("\n");
 
-        sb.append("Russian MUST-COVER:\n");
-        for (RuParagraph p : ruConsume) {
+        sb.append("Russian CANDIDATES (target ~60, minimum 55, maximum 65):\n");
+        for (RuParagraph p : ruCandidates) {
             sb.append(p.id).append(": ").append(sanitizeLine(p.cyr)).append("\n");
         }
         sb.append("\n");
@@ -295,21 +323,28 @@ public class Main {
             String apiKey,
             String basePrompt,
             String startingChunkId,
-            List<RuParagraph> ruConsume,
+            List<RuParagraph> ruCandidates,
             List<EnParagraph> enWindow,
             Map<String, Integer> enIndexById
     ) throws IOException, InterruptedException {
-        ChunkWindowResponse first = callAnthropic(apiKey, basePrompt);
-        try {
-            validateWindowResponse(first, startingChunkId, ruConsume, enWindow, enIndexById);
-            return first;
-        } catch (IllegalArgumentException e) {
-            // Retry once with stricter suffix
-            String retryPrompt = basePrompt + "\n\nYour previous output was invalid. Output JSON only and obey all constraints.\n";
-            ChunkWindowResponse second = callAnthropic(apiKey, retryPrompt);
-            validateWindowResponse(second, startingChunkId, ruConsume, enWindow, enIndexById);
-            return second;
+        String[] retryMessages = {
+                "Your previous output was invalid. Output JSON only and obey all constraints.",
+                "INVALID OUTPUT. Every RU paragraph in MUST-COVER must appear in EXACTLY ONE chunk. No duplicates. No omissions. JSON only.",
+                "CRITICAL: Output a single valid JSON object. Each ru-XXXXXX id from MUST-COVER appears in exactly one chunk. No exceptions."
+        };
+        IllegalArgumentException lastException = null;
+        for (int attempt = 0; attempt < 4; attempt++) {
+            String prompt = attempt == 0 ? basePrompt : basePrompt + "\n\n" + retryMessages[attempt - 1] + "\n";
+            ChunkWindowResponse response = callAnthropic(apiKey, prompt);
+            try {
+                validateWindowResponse(response, startingChunkId, ruCandidates, enWindow, enIndexById);
+                return response;
+            } catch (IllegalArgumentException e) {
+                System.err.println("Attempt " + (attempt+1) + " validation error: " + e.getMessage());
+                lastException = e;
+            }
         }
+        throw lastException;
     }
 
     private static ChunkWindowResponse callAnthropic(String apiKey, String prompt)
@@ -359,6 +394,8 @@ public class Main {
         }
 
         String jsonPayload = extractJsonPayload(text);
+        System.err.println("Attempt raw response (first 500 chars): " +
+                jsonPayload.substring(0, Math.min(500, jsonPayload.length())));
         try {
             return MAPPER.readValue(jsonPayload, ChunkWindowResponse.class);
         } catch (IOException e) {
@@ -383,7 +420,7 @@ public class Main {
     private static void validateWindowResponse(
             ChunkWindowResponse response,
             String expectedStartingChunkId,
-            List<RuParagraph> ruConsume,
+            List<RuParagraph> ruCandidates,
             List<EnParagraph> enWindow,
             Map<String, Integer> enIndexById
     ) {
@@ -393,9 +430,33 @@ public class Main {
         if (response.chunks == null || response.chunks.isEmpty()) {
             throw new IllegalArgumentException("Response has no chunks.");
         }
+        if (response.lastRuCovered == null || response.lastRuCovered.isBlank()) {
+            throw new IllegalArgumentException("Response missing lastRuCovered.");
+        }
+
+        // Resolve covered set: from first candidate up to and including lastRuCovered
+        Set<String> ruCandidateIds = new HashSet<>();
+        List<String> ruCandidateIdOrder = new ArrayList<>();
+        for (RuParagraph p : ruCandidates) {
+            if (p.id == null || p.id.isBlank()) {
+                throw new IllegalArgumentException("RU candidate paragraph has empty id.");
+            }
+            ruCandidateIds.add(p.id);
+            ruCandidateIdOrder.add(p.id);
+        }
+        if (!ruCandidateIds.contains(response.lastRuCovered)) {
+            throw new IllegalArgumentException("lastRuCovered '" + response.lastRuCovered + "' is not in candidates.");
+        }
+        int lastCoveredPosition = ruCandidateIdOrder.indexOf(response.lastRuCovered);
+        Set<String> ruCoveredIds = new HashSet<>(ruCandidateIdOrder.subList(0, lastCoveredPosition + 1));
+        int coveredCount = ruCoveredIds.size();
+        boolean isLastWindow = (lastCoveredPosition == ruCandidates.size() - 1);
+        if (!isLastWindow && (coveredCount < RU_CONSUME_MIN || coveredCount > RU_CONSUME_MAX)) {
+            throw new IllegalArgumentException("Covered RU count " + coveredCount +
+                    " is outside allowed range [" + RU_CONSUME_MIN + ", " + RU_CONSUME_MAX + "].");
+        }
 
         // 1) chunk IDs sequential starting at expected startingChunkId
-        String currentId = expectedStartingChunkId;
         int expectedNumeric = parseChunkNumeric(expectedStartingChunkId);
         for (int i = 0; i < response.chunks.size(); i++) {
             Chunk chunk = response.chunks.get(i);
@@ -408,16 +469,6 @@ public class Main {
                         ": expected " + formatChunkId(expectedNumeric) + " but got " + chunk.id);
             }
             expectedNumeric++;
-            currentId = chunk.id;
-        }
-
-        // Build sets for RU and EN validation
-        Set<String> ruConsumeIds = new HashSet<>();
-        for (RuParagraph p : ruConsume) {
-            if (p.id == null || p.id.isBlank()) {
-                throw new IllegalArgumentException("RU consume paragraph has empty id.");
-            }
-            ruConsumeIds.add(p.id);
         }
 
         Set<String> enWindowIds = new HashSet<>();
@@ -428,14 +479,13 @@ public class Main {
             enWindowIds.add(p.id);
         }
 
-        // 2) RU coverage: each RU id in consume appears exactly once
+        // RU: every paragraph from first candidate to lastRuCovered appears in exactly one chunk (no gaps, no duplicates)
         Map<String, Integer> ruCounts = new HashMap<>();
-        for (String id : ruConsumeIds) {
+        for (String id : ruCoveredIds) {
             ruCounts.put(id, 0);
         }
 
-        // 4) EN ids subset of provided EN window
-        // 5) EN ids monotonic (increasing by appearance)
+        // EN ids subset of provided EN window and monotonic
         int lastEnIndex = -1;
         List<String> allEnIdsUsed = new ArrayList<>();
 
@@ -447,10 +497,17 @@ public class Main {
             }
 
             for (String ruId : chunk.ru) {
-                if (!ruConsumeIds.contains(ruId)) {
-                    throw new IllegalArgumentException("Chunk " + chunk.id + " references RU id outside consume set: " + ruId);
+                if (!ruCandidateIds.contains(ruId)) {
+                    throw new IllegalArgumentException("Chunk " + chunk.id + " references RU id outside candidates: " + ruId);
                 }
-                ruCounts.merge(ruId, 1, Integer::sum);
+                if (ruCoveredIds.contains(ruId)) {
+                    ruCounts.merge(ruId, 1, Integer::sum);
+                }
+                // RU ids after lastRuCovered are not allowed in chunks
+                if (ruCandidateIdOrder.indexOf(ruId) > lastCoveredPosition) {
+                    throw new IllegalArgumentException("Chunk " + chunk.id + " references RU id " + ruId +
+                            " which is after lastRuCovered.");
+                }
             }
 
             if (chunk.en != null) {
@@ -474,13 +531,14 @@ public class Main {
             }
         }
 
-        // Check RU coverage counts
+        // Check RU covered: each must appear exactly once
         for (Map.Entry<String, Integer> e : ruCounts.entrySet()) {
             if (e.getValue() == 0) {
                 throw new IllegalArgumentException("RU paragraph " + e.getKey() + " not covered by any chunk.");
             }
             if (e.getValue() > 1) {
-                throw new IllegalArgumentException("RU paragraph " + e.getKey() + " appears in multiple chunks (" + e.getValue() + " times).");
+                throw new IllegalArgumentException("RU paragraph " + e.getKey() +
+                        " appears in multiple chunks (" + e.getValue() + " times).");
             }
         }
 
@@ -591,6 +649,7 @@ public class Main {
     static class ChunkWindowResponse {
         public List<Chunk> chunks;
         public String lastEnUsed;
+        public String lastRuCovered;
     }
 }
 
