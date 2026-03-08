@@ -43,12 +43,18 @@ document.addEventListener("DOMContentLoaded", () => {
       audioBar.appendChild(audio);
       document.body.insertBefore(audioBar, document.body.firstChild);
 
-
       attachAudioSync({
         audio,
         cues,
         ruToChunk: bookData.ruToChunk,
         getChunkElById: getChunkElementById,
+        getWordSpanByIndex: (chunkId: string, wordIndex: number) => {
+          const chunkEl = getChunkElementById(chunkId);
+          if (!chunkEl) return null;
+          const all = chunkEl.querySelectorAll<HTMLElement>
+            (`.word[data-word-index="${wordIndex}"]`);
+          return all[0] ?? null;
+        },
         onActiveChange: (change) => {
           console.log("Active cue changed:", change);
         },
