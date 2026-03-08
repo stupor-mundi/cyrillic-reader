@@ -10,44 +10,50 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 public class Main {
     private static final String USAGE = """
-        Usage: java -jar textprep.jar <mode> <input.txt> <output.json>
-        Modes: ru (Russian + transliteration), en (English)
+        Usage: java -jar textprep.jar <dataDir> <bookId>
+        Example: java -jar textprep.jar ../../data pushkin_kd
         """;
 
     public static void main(String[] args) {
-        if (args.length != 3) {
+        if (args.length != 2) {
             System.err.println(USAGE);
             System.exit(1);
         }
-        String mode = args[0];
-        String inputPath = args[1];
-        String outputPath = args[2];
+        String dataDir = args[0];
+        String bookId = args[1];
 
-        if (!mode.equals("ru") && !mode.equals("en")) {
-            System.err.println("Error: mode must be 'ru' or 'en'");
-            System.err.println(USAGE);
+        Path baseDir = Path.of(dataDir, bookId);
+        Path ruInput = baseDir.resolve("ru.txt");
+        Path enInput = baseDir.resolve("en.txt");
+        Path ruOutput = baseDir.resolve("ru.json");
+        Path enOutput = baseDir.resolve("en.json");
+
+        processLanguage("ru", ruInput, ruOutput);
+        processLanguage("en", enInput, enOutput);
+    }
+
+    private static void processLanguage(String mode, Path inputPath, Path outputPath) {
+        if (!Files.exists(inputPath)) {
+            System.err.println("Error: input file not found: " + inputPath.toAbsolutePath());
             System.exit(1);
         }
 
-        Path in = Path.of(inputPath);
-        if (!Files.exists(in)) {
-            System.err.println("Error: input file not found: " + inputPath);
-            System.exit(1);
-        }
-
-        String content ="";
+        String content = "";
         try {
-            content = Files.readString(in, StandardCharsets.UTF_8);
-            content = content.replaceAll("\\[\\d+\\]", "");
-            content = content.replaceAll("[\\p{Cf}\\uFEFF]", "");
-            content = content.replaceAll("\\p{Zs}", " ");
+            content = Files.readString(inputPath, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            System.err.println("Error: cannot read input file: " + e.getMessage());
+            System.err.println("Error: cannot read input file " + inputPath.toAbsolutePath() + ": " + e.getMessage());
             System.exit(1);
         }
+
+        // Text cleanup operations applied immediately after reading
+        content = content.replaceAll("\\[\\d+\\]", "");
+        content = content.replaceAll("[\\p{Cf}\\uFEFF]", "");
+        content = content.replaceAll("\\p{Zs}", " ");
 
         // Normalize line endings
         content = content.replace("\r\n", "\n").replace("\r", "\n");
@@ -58,6 +64,12 @@ public class Main {
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
+
+        List<String> limitedParas = new ArrayList<>();
+        for (String para : rawParas) {
+            limitedParas.addAll(splitLongParagraph(para, 1200));
+        }
+        rawParas = limitedParas;
 
         String prefix = mode + "-";
         List<Map<String, String>> paragraphs = new ArrayList<>();
@@ -80,10 +92,130 @@ public class Main {
 
         ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
         try {
-            mapper.writeValue(Files.newBufferedWriter(Path.of(outputPath), StandardCharsets.UTF_8), output);
+            mapper.writeValue(Files.newBufferedWriter(outputPath, StandardCharsets.UTF_8), output);
         } catch (IOException e) {
-            System.err.println("Error: cannot write output file: " + e.getMessage());
+            System.err.println("Error: cannot write output file " + outputPath.toAbsolutePath() + ": " + e.getMessage());
             System.exit(1);
         }
+    }
+
+    private static List<String> splitLongParagraph(String text, int maxChars) {
+        if (text.length() <= maxChars) {
+            return List.of(text);
+        }
+
+        int length = text.length();
+        int mid = length / 2;
+        int splitPoint = -1;
+
+        List<Integer> positions = new ArrayList<>();
+
+        // a) ". ", "? ", "! "
+        for (int i = 1; i < length; i++) {
+            char prev = text.charAt(i - 1);
+            char curr = text.charAt(i);
+            if (curr == ' ' && (prev == '.' || prev == '?' || prev == '!')) {
+                positions.add(i);
+            }
+        }
+        if (!positions.isEmpty()) {
+            splitPoint = positions.get(0);
+            int bestDist = Math.abs(splitPoint - mid);
+            for (int i = 1; i < positions.size(); i++) {
+                int pos = positions.get(i);
+                int dist = Math.abs(pos - mid);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    splitPoint = pos;
+                }
+            }
+        }
+
+        // b) "; ", ": "
+        if (splitPoint == -1) {
+            positions.clear();
+            for (int i = 1; i < length; i++) {
+                char prev = text.charAt(i - 1);
+                char curr = text.charAt(i);
+                if (curr == ' ' && (prev == ';' || prev == ':')) {
+                    positions.add(i);
+                }
+            }
+            if (!positions.isEmpty()) {
+                splitPoint = positions.get(0);
+                int bestDist = Math.abs(splitPoint - mid);
+                for (int i = 1; i < positions.size(); i++) {
+                    int pos = positions.get(i);
+                    int dist = Math.abs(pos - mid);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        splitPoint = pos;
+                    }
+                }
+            }
+        }
+
+        // c) ", "
+        if (splitPoint == -1) {
+            positions.clear();
+            for (int i = 1; i < length; i++) {
+                char prev = text.charAt(i - 1);
+                char curr = text.charAt(i);
+                if (curr == ' ' && prev == ',') {
+                    positions.add(i);
+                }
+            }
+            if (!positions.isEmpty()) {
+                splitPoint = positions.get(0);
+                int bestDist = Math.abs(splitPoint - mid);
+                for (int i = 1; i < positions.size(); i++) {
+                    int pos = positions.get(i);
+                    int dist = Math.abs(pos - mid);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        splitPoint = pos;
+                    }
+                }
+            }
+        }
+
+        // d) closest space
+        if (splitPoint == -1) {
+            positions.clear();
+            for (int i = 0; i < length; i++) {
+                if (text.charAt(i) == ' ') {
+                    positions.add(i);
+                }
+            }
+            if (!positions.isEmpty()) {
+                splitPoint = positions.get(0);
+                int bestDist = Math.abs(splitPoint - mid);
+                for (int i = 1; i < positions.size(); i++) {
+                    int pos = positions.get(i);
+                    int dist = Math.abs(pos - mid);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        splitPoint = pos;
+                    }
+                }
+            }
+        }
+
+        // e) no space at all
+        if (splitPoint == -1) {
+            splitPoint = mid;
+        }
+
+        String left = text.substring(0, splitPoint).trim();
+        String right = text.substring(splitPoint).trim();
+
+        List<String> result = new ArrayList<>();
+        if (!left.isEmpty()) {
+            result.addAll(splitLongParagraph(left, maxChars));
+        }
+        if (!right.isEmpty()) {
+            result.addAll(splitLongParagraph(right, maxChars));
+        }
+        return result;
     }
 }

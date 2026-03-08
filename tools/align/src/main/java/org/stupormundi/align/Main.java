@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -71,7 +72,7 @@ public class Main {
 
             String[] anchorTokens = normalizeAndTokenize(startParagraph.cyr);
             int searchPos;
-            MatchResult anchorMatch = fuzzyMatch(anchorTokens, words, 0);
+            MatchResult anchorMatch = fuzzyMatch(anchorTokens, new String[0], words, 0, false);
             if (anchorMatch != null) {
                 searchPos = anchorMatch.lastMatchedWordIndex + 1;
             } else {
@@ -101,14 +102,31 @@ public class Main {
             for (int i = contentStartIdx; i <= endIdx; i++) {
                 Paragraph p = paragraphsData.paragraphs.get(i);
                 String[] tokens = normalizeAndTokenize(p.cyr);
-                MatchResult match = fuzzyMatch(tokens, words, searchPos);
+                List<String> lookaheadList = new ArrayList<>();
+                for (int offset = 1; offset <= 2; offset++) {
+                    int idx = i + offset;
+                    if (idx > endIdx) {
+                        break;
+                    }
+                    Paragraph nextParagraph = paragraphsData.paragraphs.get(idx);
+                    String[] nextTokens = normalizeAndTokenize(nextParagraph.cyr);
+                    if (nextTokens.length > 0) {
+                        lookaheadList.addAll(Arrays.asList(nextTokens));
+                    }
+                }
+                String[] lookaheadTokens = lookaheadList.toArray(new String[0]);
+                MatchResult match = fuzzyMatch(tokens, lookaheadTokens, words, searchPos, "ru-000023".equals(p.id));
                 if (match != null) {
                     int first = match.firstMatchedWordIndex;
                     int last = match.lastMatchedWordIndex;
                     if (first >= 0 && last >= first && last < words.size()) {
                         double cueStart = words.get(first).start;
                         if (cueStart < lastCueEndTime - 1.0) {
-                            System.err.println("time-rejected: " + p.id + " start=" + cueStart + " lastCueEnd=" + lastCueEndTime);
+                            System.err.println("time-rejected: " + p.id + 
+                                " matchStart=" + words.get(first).start + 
+                                " lastCueEnd=" + lastCueEndTime +
+                                " firstIdx=" + first +
+                                " searchPos=" + searchPos);
                         } else {
                             List<CueWord> cueWords = new ArrayList<>();
                             for (int w = first; w <= last; w++) {
@@ -128,6 +146,9 @@ public class Main {
                             cues.add(cue);
 
                             searchPos = last + 1;
+
+                            System.err.println("searchPos after " + p.id + ": " + searchPos + " (time=" + words.get(last).end + ")");
+
                             lastCueEndTime = words.get(last).end;
                         }
                     }
@@ -296,12 +317,24 @@ public class Main {
         return LEVENSHTEIN.apply(wordNorm, token) != -1;
     }
 
-    private static MatchResult fuzzyMatch(String[] tokens, List<Word> words, int searchPos) {
+    private static MatchResult fuzzyMatch(String[] tokens, String[] lookaheadTokens,
+                                          List<Word> words, int searchPos, boolean debug) {
         if (tokens.length == 0 || words.isEmpty() || searchPos >= words.size()) {
             return null;
         }
 
         int maxStart = Math.min(words.size() - 1, searchPos + 300);
+        int totalTokens = tokens.length + lookaheadTokens.length;
+
+        if (debug) {
+            System.err.println("DEBUG fuzzyMatch: tokens=" + tokens.length +
+                    " searchPos=" + searchPos + " maxStart=" + Math.min(words.size() - 1, searchPos + 300));
+            System.err.println("DEBUG first 5 tokens: " +
+                    String.join(", ", Arrays.copyOf(tokens, Math.min(5, tokens.length))));
+            System.err.println("DEBUG words at searchPos: " +
+                    words.get(Math.min(searchPos, words.size() - 1)).norm + " ... " +
+                    words.get(Math.min(searchPos + 5, words.size() - 1)).norm);
+        }
 
         for (int candidateStart = searchPos; candidateStart <= maxStart; candidateStart++) {
             int wordIdx = candidateStart;
@@ -311,38 +344,21 @@ public class Main {
             int firstMatchedWordIndex = -1;
             int lastMatchedWordIndex = -1;
 
-            int gateTokenCount = Math.min(3, tokens.length);
-            int gateMatches = 0;
-            int windowEnd = Math.min(words.size() - 1, candidateStart + 4);
-            for (int t = 0; t < gateTokenCount; t++) {
-                String token = tokens[t];
-                boolean tokenFound = false;
-                for (int w = candidateStart; w <= windowEnd; w++) {
-                    String wordNormGate = words.get(w).norm;
-                    if (wordNormGate != null && isMatch(wordNormGate, token)) {
-                        tokenFound = true;
-                        break;
-                    }
-                }
-                if (tokenFound) {
-                    gateMatches++;
-                }
-            }
-            int requiredGateMatches = (tokens.length < 3) ? gateTokenCount : 2;
-            if (gateMatches < requiredGateMatches) {
-                continue;
-            }
-
-            while (tokenIdx < tokens.length && wordIdx < words.size()) {
-                String token = tokens[tokenIdx];
+            while (tokenIdx < totalTokens && wordIdx < words.size()) {
+                boolean inMainTokens = tokenIdx < tokens.length;
+                String token = inMainTokens
+                        ? tokens[tokenIdx]
+                        : lookaheadTokens[tokenIdx - tokens.length];
                 String wordNorm = words.get(wordIdx).norm;
 
                 if (wordNorm != null && isMatch(wordNorm, token)) {
-                    if (firstMatchedWordIndex == -1) {
-                        firstMatchedWordIndex = wordIdx;
+                    if (inMainTokens) {
+                        if (firstMatchedWordIndex == -1) {
+                            firstMatchedWordIndex = wordIdx;
+                        }
+                        lastMatchedWordIndex = wordIdx;
+                        matchedCount++;
                     }
-                    lastMatchedWordIndex = wordIdx;
-                    matchedCount++;
                     consecutiveMismatches = 0;
                     tokenIdx++;
                     wordIdx++;
@@ -359,6 +375,12 @@ public class Main {
             }
 
             int minRequired = Math.max(1, (int) (0.3 * tokens.length));
+
+            if (debug && candidateStart - searchPos < 5) {
+                System.err.println("DEBUG cand=" + candidateStart +
+                        " matched=" + matchedCount + " needed=" + minRequired);
+            }
+
             if (matchedCount >= minRequired && firstMatchedWordIndex != -1) {
                 MatchResult result = new MatchResult();
                 result.firstMatchedWordIndex = firstMatchedWordIndex;
@@ -366,6 +388,10 @@ public class Main {
                 result.matchedCount = matchedCount;
                 return result;
             }
+        }
+
+        if (debug) {
+            System.err.println("DEBUG no match found for ru-000022");
         }
 
         return null;

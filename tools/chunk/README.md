@@ -27,7 +27,7 @@ This approach allows the final chunks.json to be assembled incrementally and det
 }
 ```
 
-java -jar chunker.jar <bookId> <ru.json> <en.json> <outChunks.json>
+java -jar chunk.jar <dataDir> <bookId>
 
 
 claude returns:

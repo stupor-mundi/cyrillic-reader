@@ -45,7 +45,7 @@ public class Main {
             .build();
 
     private static final String USAGE = """
-            Usage: java -jar chunker.jar <bookId> <ru.json> <en.json> <outChunks.json>
+            Usage: java -jar chunk.jar <dataDir> <bookId>
             """;
 
     public static void main(String[] args) {
@@ -59,16 +59,18 @@ public class Main {
     }
 
     private static void run(String[] args) throws Exception {
-        if (args.length != 4) {
-            System.err.println("Error: expected 4 arguments, got " + args.length);
+        if (args.length != 2) {
+            System.err.println("Error: expected 2 arguments, got " + args.length);
             System.err.println(USAGE);
             System.exit(1);
         }
 
-        String bookId = args[0];
-        Path ruPath = Path.of(args[1]);
-        Path enPath = Path.of(args[2]);
-        Path outPath = Path.of(args[3]);
+        String dataDir = args[0];
+        String bookId = args[1];
+        Path baseDir = Path.of(dataDir, bookId);
+        Path ruPath = baseDir.resolve("ru.json");
+        Path enPath = baseDir.resolve("en.json");
+        Path outPath = baseDir.resolve("chunks.json");
 
         if (!Files.exists(ruPath)) {
             throw new IllegalArgumentException("ru.json not found: " + ruPath);
