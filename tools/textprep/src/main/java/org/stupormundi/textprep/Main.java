@@ -1,4 +1,4 @@
-package org.stupormundi.translit;
+package org.stupormundi.textprep;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -41,6 +41,9 @@ public class Main {
         String content ="";
         try {
             content = Files.readString(in, StandardCharsets.UTF_8);
+            content = content.replaceAll("\\[\\d+\\]", "");
+            content = content.replaceAll("[\\p{Cf}\\uFEFF]", "");
+            content = content.replaceAll("\\p{Zs}", " ");
         } catch (IOException e) {
             System.err.println("Error: cannot read input file: " + e.getMessage());
             System.exit(1);
