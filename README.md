@@ -2,14 +2,11 @@
 
 A pipeline for reading Russian literary texts with synchronized audio playback,
 bilingual display, and transliteration. The reader highlights the active paragraph
-as the audiobook plays.
+and active word as the audiobook plays.
 
 ---
 
 ## Pipeline Overview
-
-Source texts and audio are processed through four tools in sequence, producing
-JSON artifacts consumed by the web reader.
 
   ru.txt + en.txt
        ↓
@@ -31,29 +28,39 @@ JSON artifacts consumed by the web reader.
 ### 1. textprep
 Java / Maven. Splits Russian and English source texts into paragraphs,
 assigns stable IDs, and generates transliteration for Russian.
+Strips footnote markers, invisible Unicode characters, and splits
+paragraphs longer than 1200 characters at natural sentence boundaries.
 
-  java -jar textprep.jar <ruTxt> <enTxt> <outDir>
+  java -jar textprep.jar <dataDir> <bookId>
 
 Example:
-  java -jar textprep.jar data/pushkin_kd/ru.txt data/pushkin_kd/en.txt data/pushkin_kd/
+  java -jar textprep.jar ../../data pushkin_kd
+
+Input:
+  <dataDir>/<bookId>/ru.txt
+  <dataDir>/<bookId>/en.txt
 
 Output:
-  ru.json
-  en.json
+  <dataDir>/<bookId>/ru.json
+  <dataDir>/<bookId>/en.json
 
 ---
 
 ### 2. chunk
 Java / Maven. Uses an LLM to align Russian and English paragraphs into
-display chunks. Each chunk is one row in the reader.
+display chunks. Each chunk is one row in the reader. Processes the book
+in windows of approximately 60 Russian paragraphs, allowing the LLM to
+choose a natural semantic boundary between 55 and 65 paragraphs per window.
 
   java -jar chunk.jar <dataDir> <bookId>
 
 Example:
-  java -jar chunk.jar data pushkin_kd
+  java -jar chunk.jar ../../data pushkin_kd
 
 Input:  ru.json, en.json
 Output: chunks.json
+
+Requires: ANTHROPIC_API_KEY environment variable
 
 ---
 
@@ -64,7 +71,8 @@ with timestamps. Run once per audio segment.
   python transcribe.py <audioFile> <outWordsJson>
 
 Example:
-  python transcribe.py data/pushkin_kd/audio/01_glava-1.mp3 data/pushkin_kd/words/s001.json
+  python transcribe.py ../../data/pushkin_kd/audio/01_glava-1.mp3 \
+                       ../../data/pushkin_kd/words/s001.json
 
 Output:
   words/s001.json
@@ -72,13 +80,14 @@ Output:
 ---
 
 ### 4. align
-Java / Maven. Matches the word timestamps to Russian paragraphs and writes
-cue files for the web reader. Run once per segment.
+Java / Maven. Matches word timestamps to Russian paragraphs using fuzzy
+matching with Levenshtein distance and read-ahead lookahead. Writes cue
+files for the web reader. Run once per segment.
 
   java -jar align.jar <dataDir> <bookId> <segmentId>
 
 Example:
-  java -jar align.jar data pushkin_kd s001
+  java -jar align.jar ../../data pushkin_kd s001
 
 Input:  words/s001.json, ru.json, audio_index.json
 Output: cues/s001.json
@@ -123,6 +132,7 @@ Output: cues/s001.json
 
 ### chunks.json
   {
+    "bookId": "pushkin_kd",
     "chunks": [
       { "id": "c000001", "ru": ["ru-000001"], "en": ["en-000001"] }
     ]
@@ -142,6 +152,10 @@ Output: cues/s001.json
       }
     ]
   }
+
+  startParagraph: chapter heading used as anchor for audio matching
+  contentStartParagraph: first story paragraph, matching starts here
+  endParagraph: last paragraph in this audio segment
 
 ### words/s001.json
   [
@@ -164,6 +178,9 @@ Output: cues/s001.json
     ]
   }
 
+  Paragraphs with no match are omitted. The web app renders all
+  paragraphs but only highlights matched ones.
+
 ---
 
 ## Web Reader
@@ -177,6 +194,14 @@ Behavior:
 - Loads ru.json, en.json, chunks.json, audio_index.json on startup
 - Renders the full book as a scrollable list of chunk rows
 - Each row shows Russian (Cyrillic), transliteration, and English side by side
+- Audio controls are fixed at the top of the page
 - When audio plays, the active paragraph is highlighted and scrolled into view
+- The active word within the paragraph is highlighted in the Cyrillic column
 - Cues for each segment are loaded on demand when that segment is selected
 - Paragraphs with no cue are rendered normally but not highlighted
+
+---
+
+## License
+
+MIT
