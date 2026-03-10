@@ -64,3 +64,17 @@ JSON and audio files are served from the public/ directory
 The application is entirely static. No backend server is required at runtime. All synchronization logic happens in the browser using the precomputed JSON artifacts.
 
 This design keeps the web layer simple, deterministic, and fully decoupled from the alignment and chunking tools.
+
+
+
+## Building a static bundle
+
+To build a self-contained static site (no server required):
+
+1. Copy web/src/staticData.example.ts to web/src/staticData.ts
+2. Replace <bookId> with your book ID (e.g. pushkin_kd)
+3. Ensure all cues files exist in web/public/data/<bookId>/cues/
+4. Run: npm run build
+5. The dist/ folder contains the complete static site.
+   Open dist/index.html directly in a browser alongside the audio files.
+   
