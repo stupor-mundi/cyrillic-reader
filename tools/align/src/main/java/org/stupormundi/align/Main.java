@@ -72,7 +72,7 @@ public class Main {
 
             String[] anchorTokens = normalizeAndTokenize(startParagraph.cyr);
             int searchPos;
-            MatchResult anchorMatch = fuzzyMatch(anchorTokens, new String[0], words, 0, false);
+            MatchResult anchorMatch = fuzzyMatch(anchorTokens, new String[0], words, 0);
             if (anchorMatch != null) {
                 searchPos = anchorMatch.lastMatchedWordIndex + 1;
             } else {
@@ -115,7 +115,7 @@ public class Main {
                     }
                 }
                 String[] lookaheadTokens = lookaheadList.toArray(new String[0]);
-                MatchResult match = fuzzyMatch(tokens, lookaheadTokens, words, searchPos, "ru-000023".equals(p.id));
+                MatchResult match = fuzzyMatch(tokens, lookaheadTokens, words, searchPos);
                 if (match != null) {
                     int first = match.firstMatchedWordIndex;
                     int last = match.lastMatchedWordIndex;
@@ -147,7 +147,6 @@ public class Main {
 
                             searchPos = last + 1;
 
-                            System.err.println("searchPos after " + p.id + ": " + searchPos + " (time=" + words.get(last).end + ")");
 
                             lastCueEndTime = words.get(last).end;
                         }
@@ -318,7 +317,7 @@ public class Main {
     }
 
     private static MatchResult fuzzyMatch(String[] tokens, String[] lookaheadTokens,
-                                          List<Word> words, int searchPos, boolean debug) {
+                                          List<Word> words, int searchPos) {
         if (tokens.length == 0 || words.isEmpty() || searchPos >= words.size()) {
             return null;
         }
@@ -326,15 +325,6 @@ public class Main {
         int maxStart = Math.min(words.size() - 1, searchPos + 300);
         int totalTokens = tokens.length + lookaheadTokens.length;
 
-        if (debug) {
-            System.err.println("DEBUG fuzzyMatch: tokens=" + tokens.length +
-                    " searchPos=" + searchPos + " maxStart=" + Math.min(words.size() - 1, searchPos + 300));
-            System.err.println("DEBUG first 5 tokens: " +
-                    String.join(", ", Arrays.copyOf(tokens, Math.min(5, tokens.length))));
-            System.err.println("DEBUG words at searchPos: " +
-                    words.get(Math.min(searchPos, words.size() - 1)).norm + " ... " +
-                    words.get(Math.min(searchPos + 5, words.size() - 1)).norm);
-        }
 
         for (int candidateStart = searchPos; candidateStart <= maxStart; candidateStart++) {
             int wordIdx = candidateStart;
@@ -376,10 +366,6 @@ public class Main {
 
             int minRequired = Math.max(1, (int) (0.3 * tokens.length));
 
-            if (debug && candidateStart - searchPos < 5) {
-                System.err.println("DEBUG cand=" + candidateStart +
-                        " matched=" + matchedCount + " needed=" + minRequired);
-            }
 
             if (matchedCount >= minRequired && firstMatchedWordIndex != -1) {
                 MatchResult result = new MatchResult();
@@ -390,9 +376,6 @@ public class Main {
             }
         }
 
-        if (debug) {
-            System.err.println("DEBUG no match found for ru-000022");
-        }
 
         return null;
     }

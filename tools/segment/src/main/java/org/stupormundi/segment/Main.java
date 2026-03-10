@@ -19,15 +19,16 @@ import java.util.stream.Stream;
 public class Main {
 
     public static void main(String[] args) {
-        if (args.length != 4) {
-            System.err.println("Usage: java -jar segment.jar <bookId> <ru.json> <audioDir> <outAudioIndex.json>");
+        if (args.length != 2) {
+            System.err.println("Usage: java -jar segment.jar <dataDir> <bookId>");
             System.exit(1);
         }
 
-        String bookId = args[0];
-        Path ruJsonPath = Paths.get(args[1]);
-        Path audioDir = Paths.get(args[2]);
-        Path outPath = Paths.get(args[3]);
+        Path baseDir = Paths.get(args[0], args[1]);
+        String bookId = args[1];
+        Path ruJsonPath = baseDir.resolve("ru.json");
+        Path audioDir = baseDir.resolve("audio");
+        Path outPath = baseDir.resolve("audio_index.json");
 
         try {
             run(bookId, ruJsonPath, audioDir, outPath);
