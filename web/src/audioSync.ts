@@ -148,17 +148,13 @@ export function attachAudioSync(opts: {
     if (cueIndex >= 0) applyActive(cueIndex, audio.currentTime);
   }
 
+
   function onSeeked(): void {
     const time = audio.currentTime;
-    currentCueIndex = binarySearchCueIndex(cues, time);
-    if (
-      currentCueIndex >= 0 &&
-      time >= cues[currentCueIndex].start &&
-      time < cues[currentCueIndex].end
-    ) {
-      applyActive(currentCueIndex, time);
-    }
+    currentCueIndex = Math.max(0, binarySearchCueIndex(cues, time));
+    applyActive(currentCueIndex, time);
   }
+
 
   audio.addEventListener("timeupdate", onTimeUpdate);
   audio.addEventListener("seeked", onSeeked);

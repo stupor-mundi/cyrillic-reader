@@ -1,6 +1,6 @@
 import { loadBook, loadSegmentCues } from "./dataLoader";
 import { renderChapter, getChunkElementById } from "./renderer";
-import { attachAudioSync } from "./audioSync";
+import { attachAudioSync, type ActiveChange } from "./audioSync";
 import "./styles.css";
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -25,6 +25,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const segment = segments[0];
       const cues = await loadSegmentCues(bookId, segment.id);
 
+      const audioBar = document.createElement("div");
+      audioBar.id = "audio-bar";
+      document.body.insertBefore(audioBar, document.body.firstChild);
       const audio = document.createElement("audio");
       audio.controls = true;
 
@@ -37,28 +40,49 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-
-      const audioBar = document.createElement("div");
-      audioBar.id = "audio-bar";
       audioBar.appendChild(audio);
-      document.body.insertBefore(audioBar, document.body.firstChild);
 
-      attachAudioSync({
+      const chapterSelect = document.createElement("select");
+      chapterSelect.id = "chapter-select";
+      for (const s of segments) {
+        const opt = document.createElement("option");
+        opt.value = s.id;
+        opt.textContent = s.id;
+        chapterSelect.appendChild(opt);
+      }
+      chapterSelect.value = segment.id;
+      audio.insertAdjacentElement("afterend", chapterSelect);
+
+      const baseSyncOpts = {
         audio,
-        cues,
         ruToChunk: bookData.ruToChunk,
         getChunkElById: getChunkElementById,
         getWordSpanByIndex: (chunkId: string, wordIndex: number) => {
           const chunkEl = getChunkElementById(chunkId);
           if (!chunkEl) return null;
-          const all = chunkEl.querySelectorAll<HTMLElement>
-            (`.word[data-word-index="${wordIndex}"]`);
+          const all = chunkEl.querySelectorAll<HTMLElement>(
+            `.word[data-word-index="${wordIndex}"]`
+          );
           return all[0] ?? null;
         },
-        onActiveChange: (change) => {
+        onActiveChange: (change: ActiveChange) => {
           console.log("Active cue changed:", change);
         },
+      };
+
+      let detach = attachAudioSync({ ...baseSyncOpts, cues });
+
+      chapterSelect.addEventListener("change", async () => {
+        const nextSegment = segments.find((s) => s.id === chapterSelect.value);
+        if (!nextSegment) return;
+        const nextCues = await loadSegmentCues(bookId, nextSegment.id);
+        audio.src = `/data/${bookId}/${nextSegment.audioFile}`;
+        detach();
+        detach = attachAudioSync({ ...baseSyncOpts, cues: nextCues });
+        audio.currentTime = 0;
+        audio.dispatchEvent(new Event("seeked"));
       });
+
 
     } catch (err) {
       console.error("Fatal initialization error:", err);
