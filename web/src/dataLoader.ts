@@ -28,19 +28,23 @@ export async function loadBook(bookId: string): Promise<{
   ruToChunk: Map<string, string>;
 }> {
   if (!import.meta.env.DEV) {
-    const { staticRu, staticEn, staticChunks, staticAudioIndex } =
-      await import("./staticData");
-    const ru = staticRu as RuJson;
-    const en = staticEn as EnJson;
-    const chunks = staticChunks as ChunksJson;
-    const audioIndex = staticAudioIndex as unknown as AudioIndexJson;
-    const ruToChunk = new Map<string, string>();
-    for (const chunk of chunks.chunks) {
-      for (const paragraphId of chunk.ru) {
-        ruToChunk.set(paragraphId, chunk.id);
+    try {
+      const { staticRu, staticEn, staticChunks, staticAudioIndex } =
+        await import("./staticData");
+      const ru = staticRu as RuJson;
+      const en = staticEn as EnJson;
+      const chunks = staticChunks as ChunksJson;
+      const audioIndex = staticAudioIndex as unknown as AudioIndexJson;
+      const ruToChunk = new Map<string, string>();
+      for (const chunk of chunks.chunks) {
+        for (const paragraphId of chunk.ru) {
+          ruToChunk.set(paragraphId, chunk.id);
+        }
       }
+      return { ru, en, chunks, audioIndex, ruToChunk };
+    } catch {
+      // fall through to fetch path
     }
-    return { ru, en, chunks, audioIndex, ruToChunk };
   }
 
   const base = `/data/${bookId}`;
@@ -67,8 +71,12 @@ export async function loadSegmentCues(
   segmentId: string
 ): Promise<CuesJson> {
   if (!import.meta.env.DEV) {
-    const { getStaticCues } = await import("./staticData");
-    return getStaticCues(segmentId) as CuesJson;
+    try {
+      const { getStaticCues } = await import("./staticData");
+      return getStaticCues(segmentId) as CuesJson;
+    } catch {
+      // fall through to fetch path
+    }
   }
 
   const url = `/data/${bookId}/cues/${segmentId}.json`;
