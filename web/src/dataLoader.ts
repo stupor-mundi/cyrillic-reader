@@ -1,4 +1,5 @@
 import type { RuJson, EnJson, ChunksJson, CuesJson } from "./types";
+import * as staticData from "./staticData";
 
 export interface AudioSegment {
   id: string;
@@ -27,24 +28,18 @@ export async function loadBook(bookId: string): Promise<{
   audioIndex: AudioIndexJson;
   ruToChunk: Map<string, string>;
 }> {
-  if (!import.meta.env.DEV) {
-    try {
-      const { staticRu, staticEn, staticChunks, staticAudioIndex } =
-        await import("./staticData");
-      const ru = staticRu as RuJson;
-      const en = staticEn as EnJson;
-      const chunks = staticChunks as ChunksJson;
-      const audioIndex = staticAudioIndex as unknown as AudioIndexJson;
-      const ruToChunk = new Map<string, string>();
-      for (const chunk of chunks.chunks) {
-        for (const paragraphId of chunk.ru) {
-          ruToChunk.set(paragraphId, chunk.id);
-        }
+  if (window.location.protocol === 'file:') {
+    const ru = staticData.staticRu as RuJson;
+    const en = staticData.staticEn as EnJson;
+    const chunks = staticData.staticChunks as ChunksJson;
+    const audioIndex = staticData.staticAudioIndex as unknown as AudioIndexJson;
+    const ruToChunk = new Map<string, string>();
+    for (const chunk of chunks.chunks) {
+      for (const paragraphId of chunk.ru) {
+        ruToChunk.set(paragraphId, chunk.id);
       }
-      return { ru, en, chunks, audioIndex, ruToChunk };
-    } catch {
-      // fall through to fetch path
     }
+    return { ru, en, chunks, audioIndex, ruToChunk };
   }
 
   const base = `/data/${bookId}`;
@@ -70,13 +65,8 @@ export async function loadSegmentCues(
   bookId: string,
   segmentId: string
 ): Promise<CuesJson> {
-  if (!import.meta.env.DEV) {
-    try {
-      const { getStaticCues } = await import("./staticData");
-      return getStaticCues(segmentId) as CuesJson;
-    } catch {
-      // fall through to fetch path
-    }
+  if (window.location.protocol === 'file:') {
+    return staticData.getStaticCues(segmentId) as CuesJson;
   }
 
   const url = `/data/${bookId}/cues/${segmentId}.json`;

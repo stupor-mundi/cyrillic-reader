@@ -2,6 +2,7 @@ import { defineConfig, Plugin } from 'vite'
 
 const fixForFileProtocol: Plugin = {
   name: 'fix-for-file-protocol',
+  apply: 'build',
   transformIndexHtml(html: string) {
     return html
       .replace(/ crossorigin/g, '')
@@ -12,11 +13,4 @@ const fixForFileProtocol: Plugin = {
 export default defineConfig({
   base: './',
   plugins: [fixForFileProtocol],
-  build: {
-    rollupOptions: {
-      output: {
-        format: 'iife'
-      }
-    }
-  }
 })

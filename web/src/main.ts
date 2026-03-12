@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   void (async () => {
     try {
       const bookId = "pushkin_kd";
-
+      const dataBase = window.location.protocol === 'file:' ? './data' : '/data';
       const container = document.getElementById("app");
       if (!container) {
         throw new Error('Container element with id "app" not found');
@@ -32,12 +32,11 @@ document.addEventListener("DOMContentLoaded", () => {
       audio.controls = true;
 
       const audioFile = segment.audioFile;
-      if (typeof audioFile === "string") {
-        if (/^https?:\/\//.test(audioFile) || audioFile.startsWith("/")) {
-          audio.src = audioFile;
-        } else {
-          audio.src = `/data/${bookId}/${audioFile}`;
-        }
+
+      if (/^https?:\/\//.test(audioFile) || audioFile.startsWith("/")) {
+        audio.src = audioFile;
+      } else {
+        audio.src = `${dataBase}/${bookId}/${audioFile}`;
       }
 
       audioBar.appendChild(audio);
@@ -76,7 +75,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const nextSegment = segments.find((s) => s.id === chapterSelect.value);
         if (!nextSegment) return;
         const nextCues = await loadSegmentCues(bookId, nextSegment.id);
-        audio.src = `/data/${bookId}/${nextSegment.audioFile}`;
+
+        audio.src = `${dataBase}/${bookId}/${nextSegment.audioFile}`;
+
         detach();
         detach = attachAudioSync({ ...baseSyncOpts, cues: nextCues });
         audio.currentTime = 0;
