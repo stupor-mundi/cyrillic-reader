@@ -44,6 +44,8 @@ export function renderChapter(
         cyrCol.appendChild(document.createTextNode("\n\n"));
         latCol.appendChild(document.createTextNode("\n\n"));
       }
+      const paragraphId = chunk.ru[pIndex];
+      globalWordIndex = 0;
       const cyrWords = cyrTexts[pIndex].split(/\s+/).filter(Boolean);
       const latWords = latTexts[pIndex].split(/\s+/).filter(Boolean);
       const maxWords = Math.max(cyrWords.length, latWords.length);
@@ -57,6 +59,7 @@ export function renderChapter(
           span.textContent = cyrWords[wIndex];
           span.dataset.chunkId = chunk.id;
           span.dataset.wordIndex = idx;
+          span.dataset.paragraphId = paragraphId;
           cyrCol.appendChild(span);
           if (wIndex < cyrWords.length - 1)
             cyrCol.appendChild(document.createTextNode(" "));
@@ -68,6 +71,7 @@ export function renderChapter(
           span.textContent = latWords[wIndex];
           span.dataset.chunkId = chunk.id;
           span.dataset.wordIndex = idx;
+          span.dataset.paragraphId = paragraphId;
           latCol.appendChild(span);
           if (wIndex < latWords.length - 1)
             latCol.appendChild(document.createTextNode(" "));

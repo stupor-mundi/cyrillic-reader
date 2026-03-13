@@ -142,6 +142,7 @@ public class Main {
                             cue.paragraphId = p.id;
                             cue.start = words.get(first).start;
                             cue.end = words.get(last).end;
+                            cue.wordOffset = match.wordOffset;
                             cue.words = cueWords;
                             cues.add(cue);
 
@@ -331,6 +332,7 @@ public class Main {
             int tokenIdx = 0;
             int matchedCount = 0;
             int consecutiveMismatches = 0;
+            int firstMatchedTokenIndex = -1;
             int firstMatchedWordIndex = -1;
             int lastMatchedWordIndex = -1;
 
@@ -345,6 +347,7 @@ public class Main {
                     if (inMainTokens) {
                         if (firstMatchedWordIndex == -1) {
                             firstMatchedWordIndex = wordIdx;
+                            firstMatchedTokenIndex = tokenIdx;
                         }
                         lastMatchedWordIndex = wordIdx;
                         matchedCount++;
@@ -372,6 +375,7 @@ public class Main {
                 result.firstMatchedWordIndex = firstMatchedWordIndex;
                 result.lastMatchedWordIndex = lastMatchedWordIndex;
                 result.matchedCount = matchedCount;
+                result.wordOffset = firstMatchedTokenIndex == -1 ? 0 : firstMatchedTokenIndex;
                 return result;
             }
         }
@@ -412,6 +416,7 @@ public class Main {
         public String paragraphId;
         public double start;
         public double end;
+        public int wordOffset;
         public List<CueWord> words;
     }
 
@@ -430,5 +435,6 @@ public class Main {
         int firstMatchedWordIndex;
         int lastMatchedWordIndex;
         int matchedCount;
+        int wordOffset;
     }
 }

@@ -87,6 +87,14 @@ export function attachAudioSync(opts: {
     if (lastActiveChunkId !== null && lastActiveChunkId !== chunkId) {
       getChunkElById(lastActiveChunkId)?.classList.remove("active");
     }
+    if (chunkChanged && lastActiveWordSpan !== null) {
+      document
+        .querySelectorAll<HTMLElement>(
+          `.word[data-chunk-id="${lastActiveChunkId}"][data-word-index="${lastActiveWordSpan.dataset.wordIndex}"]`
+        )
+        .forEach((s) => s.classList.remove("word-active"));
+      lastActiveWordSpan = null;
+    }
     lastActiveChunkId = chunkId;
     el.classList.add("active");
     if (chunkChanged) el.scrollIntoView({ block: "center" });
@@ -106,40 +114,26 @@ export function attachAudioSync(opts: {
     const wordIndex = findWordIndex(words, time);
     if (wordIndex < 0) return;
 
-    const span = getWordSpanByIndex(chunkId, wordIndex);
+    const offset = cue.wordOffset ?? 0;
+    const offsetIndex = wordIndex + offset;
+    const allSpans = document.querySelectorAll<HTMLElement>(
+      `.word[data-paragraph-id="${cue.paragraphId}"][data-word-index="${offsetIndex}"]`
+    );
 
-    let lastChunkIdForWord: string | null = null;
-    let lastWordIndex: number | null = null;
+    // Remove from previous
     if (lastActiveWordSpan !== null) {
-      const { chunkId: lastChunkIdData, wordIndex: lastWordIndexData } =
-        lastActiveWordSpan.dataset;
-      if (lastChunkIdData != null && lastWordIndexData != null) {
-        lastChunkIdForWord = lastChunkIdData;
-        const parsed = Number(lastWordIndexData);
-        if (!Number.isNaN(parsed)) {
-          lastWordIndex = parsed;
-        }
-      }
-    }
-
-    const isSameWord =
-      lastChunkIdForWord === chunkId && lastWordIndex === wordIndex;
-
-    if (!isSameWord && lastChunkIdForWord !== null && lastWordIndex !== null) {
-      const prevSpans = document.querySelectorAll<HTMLElement>(
-        `.word[data-chunk-id="${lastChunkIdForWord}"][data-word-index="${lastWordIndex}"]`
-      );
-      prevSpans.forEach((s) => s.classList.remove("word-active"));
-    }
-
-    if (span !== null) {
-      const allSpans = document.querySelectorAll<HTMLElement>(
-        `.word[data-chunk-id="${chunkId}"][data-word-index="${wordIndex}"]`
-      );
-      allSpans.forEach((s) => s.classList.add("word-active"));
-      lastActiveWordSpan = span;
-    } else if (lastActiveWordSpan !== null && !isSameWord) {
+      document
+        .querySelectorAll<HTMLElement>(
+          `.word[data-paragraph-id="${lastActiveWordSpan.dataset.paragraphId}"][data-word-index="${lastActiveWordSpan.dataset.wordIndex}"]`
+        )
+        .forEach((s) => s.classList.remove("word-active"));
       lastActiveWordSpan = null;
+    }
+
+    // Apply to all matching spans (cyr + lat)
+    if (allSpans.length > 0) {
+      allSpans.forEach((s) => s.classList.add("word-active"));
+      lastActiveWordSpan = allSpans[0];
     }
   }
 
@@ -166,13 +160,11 @@ export function attachAudioSync(opts: {
       getChunkElById(lastActiveChunkId)?.classList.remove("active");
     }
     if (lastActiveWordSpan !== null) {
-      const { chunkId, wordIndex } = lastActiveWordSpan.dataset;
-      if (chunkId != null && wordIndex != null) {
-        const allSpans = document.querySelectorAll<HTMLElement>(
-          `.word[data-chunk-id="${chunkId}"][data-word-index="${wordIndex}"]`
-        );
-        allSpans.forEach((s) => s.classList.remove("word-active"));
-      }
+      document
+        .querySelectorAll<HTMLElement>(
+          `.word[data-paragraph-id="${lastActiveWordSpan.dataset.paragraphId}"][data-word-index="${lastActiveWordSpan.dataset.wordIndex}"]`
+        )
+        .forEach((s) => s.classList.remove("word-active"));
       lastActiveWordSpan = null;
     }
   };

@@ -38,6 +38,7 @@ export interface Cue {
   readonly paragraphId: string;
   readonly start: number;
   readonly end: number;
+  readonly wordOffset?: number;
 }
 
 export interface CuesJson {
