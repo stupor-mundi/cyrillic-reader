@@ -52,6 +52,23 @@ document.addEventListener("DOMContentLoaded", () => {
       chapterSelect.value = segment.id;
       audio.insertAdjacentElement("afterend", chapterSelect);
 
+
+      const speedSelect = document.createElement("select");
+      speedSelect.id = "speed-select";
+      for (let i = 5; i <= 15; i++) {
+        const val = (i / 10).toFixed(1);
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = `${val}x`;
+        if (val === "1.0") opt.selected = true;
+        speedSelect.appendChild(opt);
+      }
+      audioBar.appendChild(speedSelect);
+      speedSelect.addEventListener("change", () => {
+        audio.playbackRate = parseFloat(speedSelect.value);
+      });
+
+
       const baseSyncOpts = {
         audio,
         ruToChunk: bookData.ruToChunk,

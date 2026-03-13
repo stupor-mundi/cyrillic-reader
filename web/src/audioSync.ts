@@ -38,6 +38,46 @@ function findWordIndex(
   return idx;
 }
 
+let lerpTarget: number | null = null;
+let rafId: number | null = null;
+const LERP_FACTOR = 0.008;
+
+function getTargetScrollY(el: HTMLElement): number {
+  const rect = el.getBoundingClientRect();
+  const viewportCenter = window.innerHeight / 2;
+  return window.scrollY + rect.top + rect.height / 2 - viewportCenter;
+}
+
+function lerpTick(): void {
+  if (lerpTarget === null) return;
+  const current = window.scrollY;
+  const diff = lerpTarget - current;
+  if (Math.abs(diff) < 0.5) {
+    window.scrollTo(0, lerpTarget);
+    lerpTarget = null;
+    rafId = null;
+    return;
+  }
+  window.scrollTo(0, current + diff * LERP_FACTOR);
+  rafId = requestAnimationFrame(lerpTick);
+}
+
+function scrollToEl(el: HTMLElement): void {
+  lerpTarget = getTargetScrollY(el);
+  if (rafId === null) {
+    rafId = requestAnimationFrame(lerpTick);
+  }
+}
+
+function scrollToElInstant(el: HTMLElement): void {
+  lerpTarget = null;
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+  window.scrollTo(0, getTargetScrollY(el));
+}
+
 export function attachAudioSync(opts: {
   audio: HTMLAudioElement;
   cues: CuesJson;
@@ -56,6 +96,7 @@ export function attachAudioSync(opts: {
   let currentCueIndex = 0;
   let lastActiveChunkId: string | null = null;
   let lastActiveWordSpan: HTMLElement | null = null;
+  let justSeeked = false;
 
   function getActiveCueIndex(time: number): number {
     if (cues.length === 0) return -1;
@@ -73,7 +114,7 @@ export function attachAudioSync(opts: {
     return currentCueIndex;
   }
 
-  function applyActive(cueIndex: number, time: number): void {
+  function applyActive(cueIndex: number, time: number, instant = false): void {
     if (cueIndex < 0 || cueIndex >= cues.length) return;
     const cue = cues[cueIndex];
     const chunkId = ruToChunk.get(cue.paragraphId);
@@ -95,7 +136,6 @@ export function attachAudioSync(opts: {
     }
     lastActiveChunkId = chunkId;
     el.classList.add("active");
-    if (chunkChanged) el.scrollIntoView({ block: "center" });
     if (chunkChanged)
       onActiveChange?.({
         paragraphId: cue.paragraphId,
@@ -107,10 +147,22 @@ export function attachAudioSync(opts: {
       words?: readonly { start: number; end: number }[];
     };
     const words = cueWithWords.words;
-    if (!words || words.length === 0) return;
+    if (!words || words.length === 0) {
+      if (chunkChanged) {
+        if (instant) scrollToElInstant(el);
+        else scrollToEl(el);
+      }
+      return;
+    }
 
     const wordIndex = findWordIndex(words, time);
-    if (wordIndex < 0) return;
+    if (wordIndex < 0) {
+      if (chunkChanged) {
+        if (instant) scrollToElInstant(el);
+        else scrollToEl(el);
+      }
+      return;
+    }
 
     const offset = cue.wordOffset ?? 0;
     const offsetIndex = wordIndex + offset;
@@ -133,18 +185,26 @@ export function attachAudioSync(opts: {
       allSpans.forEach((s) => s.classList.add("word-active"));
       lastActiveWordSpan = allSpans[0];
     }
+
+    if (allSpans.length > 0) {
+      if (instant) scrollToElInstant(el);
+      else scrollToEl(allSpans[0]);
+    }
   }
 
   function onTimeUpdate(): void {
     const cueIndex = getActiveCueIndex(audio.currentTime);
-    if (cueIndex >= 0) applyActive(cueIndex, audio.currentTime);
+    if (cueIndex >= 0) {
+      applyActive(cueIndex, audio.currentTime, justSeeked);
+    }
+    justSeeked = false;
   }
 
-
   function onSeeked(): void {
+    justSeeked = true;
     const time = audio.currentTime;
     currentCueIndex = Math.max(0, binarySearchCueIndex(cues, time));
-    applyActive(currentCueIndex, time);
+    applyActive(currentCueIndex, time, true);
   }
 
 
@@ -154,6 +214,11 @@ export function attachAudioSync(opts: {
   return function detach(): void {
     audio.removeEventListener("timeupdate", onTimeUpdate);
     audio.removeEventListener("seeked", onSeeked);
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    lerpTarget = null;
     if (lastActiveChunkId != null) {
       getChunkElById(lastActiveChunkId)?.classList.remove("active");
     }
