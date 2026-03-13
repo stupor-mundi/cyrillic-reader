@@ -51,9 +51,13 @@
   max-width: 100%;
 }
 
+.word {
+  padding: 0 1px;
+}
+
 .word-active {
   background-color: #f5e642;
   border-radius: 2px;
-  padding: 0 1px;
 }
+
 
