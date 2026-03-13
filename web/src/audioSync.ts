@@ -43,7 +43,6 @@ export function attachAudioSync(opts: {
   cues: CuesJson;
   ruToChunk: Map<string, string>;
   getChunkElById: (chunkId: string) => HTMLElement | null;
-  getWordSpanByIndex: (chunkId: string, wordIndex: number) => HTMLElement | null;
   onActiveChange?: (change: ActiveChange) => void;
 }): () => void {
   const {
@@ -51,7 +50,6 @@ export function attachAudioSync(opts: {
     cues: cuesData,
     ruToChunk,
     getChunkElById,
-    getWordSpanByIndex,
     onActiveChange,
   } = opts;
   const cues = cuesData.cues;

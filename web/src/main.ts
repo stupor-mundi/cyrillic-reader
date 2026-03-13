@@ -6,7 +6,7 @@ import "./styles.css";
 document.addEventListener("DOMContentLoaded", () => {
   void (async () => {
     try {
-      const bookId = "pushkin_kd";
+      const bookId = import.meta.env.VITE_BOOK_ID as string;
       const dataBase = window.location.protocol === 'file:' ? './data' : '/data';
       const container = document.getElementById("app");
       if (!container) {
@@ -56,14 +56,6 @@ document.addEventListener("DOMContentLoaded", () => {
         audio,
         ruToChunk: bookData.ruToChunk,
         getChunkElById: getChunkElementById,
-        getWordSpanByIndex: (chunkId: string, wordIndex: number) => {
-          const chunkEl = getChunkElementById(chunkId);
-          if (!chunkEl) return null;
-          const all = chunkEl.querySelectorAll<HTMLElement>(
-            `.word[data-word-index="${wordIndex}"]`
-          );
-          return all[0] ?? null;
-        },
         onActiveChange: (change: ActiveChange) => {
           console.log("Active cue changed:", change);
         },
