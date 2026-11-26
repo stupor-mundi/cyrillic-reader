@@ -99,7 +99,8 @@ public class Main {
         }
     }
 
-    private static List<String> splitLongParagraph(String text, int maxChars) {
+    // Package-private for tests.
+    static List<String> splitLongParagraph(String text, int maxChars) {
         if (text.length() <= maxChars) {
             return List.of(text);
         }

@@ -112,7 +112,8 @@ public class Main {
         mapper.writerWithDefaultPrettyPrinter().writeValue(outPath.toFile(), index);
     }
 
-    private static List<Segment> buildSegments(List<Paragraph> paragraphs) {
+    // Package-private for tests.
+    static List<Segment> buildSegments(List<Paragraph> paragraphs) {
         List<Integer> chapterStartIndices = new ArrayList<>();
 
         for (int i = 0; i < paragraphs.size(); i++) {
@@ -171,7 +172,8 @@ public class Main {
         return segments;
     }
 
-    private static List<Path> listAudioFiles(Path audioDir) throws IOException {
+    // Package-private for tests.
+    static List<Path> listAudioFiles(Path audioDir) throws IOException {
         try (Stream<Path> stream = Files.list(audioDir)) {
             return stream
                     .filter(Files::isRegularFile)

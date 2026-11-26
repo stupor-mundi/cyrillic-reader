@@ -23,6 +23,27 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
 
 ## Log
 
+### 2026-11-26 `[idle]` (Java test setup)
+
+- Fixed root `.gitignore`: removed the global `*.json` rule that hid `web/package.json` and
+  `web/tsconfig.json`. **Laptop: `git add` those files (and the lockfile) after pulling.**
+- Added JUnit 5 (5.11.4) and Surefire 3.5.2 to `tools/textprep`, `tools/segment` and `tools/chunk`,
+  each with a `MainSmokeTest` under `src/test/java`. `mvn test` passes in all three.
+  `tools/align` is deliberately untouched: add the same dependency and plugin there on the laptop.
+- Java 21 is required. On the idle machine the default `JAVA_HOME` is Corretto 11; Corretto 21 is at
+  `C:\Program Files\Amazon Corretto\jdk21.0.13_1` (set `JAVA_HOME` per session before running Maven).
+- Unused-looking dependencies noticed (not removed): `icu4j` in `segment`, `picocli` and `picocli-codegen` in `chunk`.
+- Characterization tests added (they lock current behaviour; they do not assert that it is ideal):
+  - `textprep`: `SplitLongParagraphTest` (7) and `MainTest` (5, end to end with a temp dir). 12 pass.
+  - `segment`: `BuildSegmentsTest` (10) and `MainTest` (3, includes MP3 listing and pairing). 13 pass.
+  - Only visibility changed in the main code: `splitLongParagraph` (`textprep`), `buildSegments` and
+    `listAudioFiles` (`segment`) went from `private` to package-private. No behaviour change.
+  - `chunk` still has only the smoke test.
+- Known quirk locked in by a test: `segment` treats any paragraph starting with "глава" as a chapter
+  heading, so a paragraph like "Главарь шайки молчал." would also start a chapter.
+- Next: tests for `chunk` (validation logic, prompt building) with a faked API client, then refactor out of
+  `Main.java`. `align` tests and refactor on the laptop.
+
 ### 2026-11-26 `[idle]`
 
 - Scanned the repo and compared the briefing to the code. Differences found: tool is `textprep`
