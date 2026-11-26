@@ -1,41 +1,61 @@
+# chunk
 
-The chunking tool operates in windows and calls the LLM multiple times. For each window, the tool provides a specific range of Russian paragraphs that must be chunked, along with an English window that includes both continuation paragraphs and contextual overlap. The LLM returns a list of chunks covering exactly the requested Russian consume range.
+Java 21 / Maven tool. Uses an LLM to align Russian and English paragraphs into
+display chunks (one row in the reader).
 
-To avoid any post-processing renumbering, the tool supplies a starting chunk ID with each request. For example, it may specify that chunk IDs must begin at c000121. The LLM is explicitly instructed to number chunks sequentially starting from that ID and to increment by exactly one for each subsequent chunk. It must not skip numbers, reuse IDs, or generate IDs outside the requested range.
+## Usage
 
-A typical response includes a list of chunks with their IDs and a field indicating the last English paragraph ID that was used. The tool validates that:
+    java -jar chunk.jar <dataDir> <bookId>
 
-* The first returned chunk ID matches the expected starting ID.
-* All chunk IDs increment sequentially by one.
-* Every Russian paragraph in the consume range appears exactly once.
-* No Russian paragraph outside the consume range appears.
-* English paragraph IDs are valid and monotonic.
-* The reported last English ID matches the highest English paragraph referenced.
+Example:
 
-If validation succeeds, the tool appends the returned chunks directly to the master chunks.json and updates its internal nextChunkId counter. It then advances the Russian pointer by the window size and advances the English pointer to the paragraph after lastEnUsed. If validation fails, the tool retries the window with stricter instructions or adjusted window sizes.
+    java -jar chunk.jar ../../data pushkin_kd
 
-This approach allows the final chunks.json to be assembled incrementally and deterministically without any renumbering step.
+Requires the `ANTHROPIC_API_KEY` environment variable. The model
+(`claude-sonnet-4-6`) and the window sizes are constants in `Main.java`.
 
+## Input / output
 
-```
-{
-  "chunks": [
-    { "id": "c000121", "ru": ["ru-00101"], "en": ["en-00098"] },
-    { "id": "c000122", "ru": ["ru-00102","ru-00103"], "en": ["en-00099"] }
-  ],
-  "lastEnUsed": "en-00105"
-}
-```
+    Input:  <dataDir>/<bookId>/ru.json, en.json
+    Output: <dataDir>/<bookId>/chunks.json
 
-java -jar chunk.jar <dataDir> <bookId>
+    { "bookId": "pushkin_kd",
+      "chunks": [ { "id": "c000001", "ru": ["ru-000001"], "en": ["en-000001"] } ] }
 
+## How it works
 
-claude returns:
+The tool processes the book in windows and calls the LLM once per window.
+For each window it sends:
 
-{
-  "chunks": [
-    { "id":"c000001", "ru":["ru-000001"], "en":["en-000001"] }
-  ],
-  "lastEnUsed": "en-000012"
-}
+- the Russian paragraphs to consume (about 60; the LLM may end the window at a natural
+  boundary between 55 and 65), plus an overlap of 10 following paragraphs as context;
+- an English window that starts 15 paragraphs before the English pointer and extends
+  120 paragraphs ahead.
 
+To avoid any renumbering, the tool passes the starting chunk ID (for example
+`c000121`) and the LLM numbers the chunks sequentially from it. A response looks like:
+
+    {
+      "chunks": [
+        { "id": "c000121", "ru": ["ru-000101"], "en": ["en-000098"] },
+        { "id": "c000122", "ru": ["ru-000102", "ru-000103"], "en": ["en-000099"] }
+      ],
+      "lastEnUsed": "en-000105"
+    }
+
+The tool validates that:
+
+- the first chunk ID is the expected one and the IDs increase by exactly one;
+- every Russian paragraph in the consume range appears exactly once and none outside it;
+- English IDs come only from the supplied English window and are monotonic;
+- `lastEnUsed` matches the highest English paragraph referenced.
+
+If validation fails, the window is retried with stricter instructions (up to
+4 attempts in total). HTTP 429 responses are retried with backoff (the org limit
+we hit was 30k input tokens per minute). On success the chunks are appended to
+`chunks.json`, the Russian pointer advances by the consumed paragraphs and the
+English pointer moves to the paragraph after `lastEnUsed`.
+
+## Build
+
+    mvn package

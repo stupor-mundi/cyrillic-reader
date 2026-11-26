@@ -1,80 +1,81 @@
-The web application is a static client-side application responsible for rendering synchronized bilingual text and audio. It loads structured JSON files produced by the backend tools and controls audio playback, highlighting, and scrolling entirely in the browser.
+# web
 
-Technology decisions:
+Static client-side reader. It loads the JSON files produced by the tools and
+controls audio playback, highlighting and scrolling entirely in the browser.
+There is no backend at runtime.
 
-The web app uses Vite as the development server and build tool. Vite provides fast hot reload during development and produces a static build suitable for simple hosting. TypeScript is used instead of plain JavaScript in order to enforce strong typing for the JSON data contracts (ru.json, en.json, chunks.json, cues.json). This reduces errors caused by field name mismatches and makes refactoring safer as the data model evolves.
+## Technology decisions
 
-No UI framework (React, Vue, etc.) is used. The application renders directly to the DOM using standard browser APIs. The UI requirements are simple: render chunk rows, highlight the active chunk, and scroll into view. A framework would add unnecessary complexity at this stage.
+- **Vite** is the dev server and build tool. It gives fast reload in development
+  and a static build.
+- **TypeScript** enforces the JSON data contracts (`ru.json`, `en.json`,
+  `chunks.json`, `cues`), so field-name mismatches are caught early.
+- **No UI framework.** The app renders directly to the DOM; the UI is simple
+  (chunk rows, an active chunk, scrolling).
+- **Native `<audio>`** provides play, pause and seek. The app listens to
+  `timeupdate` and `seeked` to find the active cue and word.
 
-The native HTML <audio> element is used for playback. The browser provides play, pause, and seek controls. The application listens to timeupdate and seeked events to determine which paragraph is active and updates highlighting and scrolling accordingly.
+## Data
 
-Data loading is done per chapter. Only the JSON and audio files required for the selected chapter are fetched. This keeps memory usage small and simplifies state management.
+All data for a book lives in `web/public/data/<bookId>/`:
 
-Paragraph IDs remain global and stable across the entire book. Chunk IDs are stable within the book. Cue files reference Russian paragraph IDs only. The web app resolves paragraphId → chunkId using an index built at runtime.
+    public/data/<bookId>/
+      ru.json
+      en.json
+      chunks.json
+      audio_index.json
+      audio/<file>.mp3            (paths come from audio_index.json)
+      cues/<segmentId>.json       (one per segment, e.g. s001.json)
 
-Folder structure:
+`ru.json`, `en.json`, `chunks.json` and `audio_index.json` are loaded at startup.
+The cues of a segment are loaded when that segment is selected. Paragraph IDs are
+global and stable across the book. Cue files reference Russian paragraph IDs
+only; the app builds a paragraph ID to chunk ID index at runtime.
 
-web/
-index.html
-package.json
-vite.config.ts
-tsconfig.json
-public/
-data/
-<bookId>/
-chapters/
-01/
-ru.json
-en.json
-chunks.json
-cues.json
-audio.mp3
-src/
-main.ts
-types.ts
-dataLoader.ts
-audioSync.ts
-renderer.ts
-styles.css
+The book to load is set by `VITE_BOOK_ID`: copy `.env.example` to `.env.local`
+(gitignored) and set it. Nothing book-specific is hardcoded.
 
-Responsibilities of key files:
+## Source files
 
-main.ts: application bootstrap and chapter initialization
+    src/main.ts         bootstrap, audio element, chapter and speed selectors
+    src/types.ts        interfaces for the JSON files
+    src/dataLoader.ts   fetches JSON (dev) or reads bundled JSON (file://)
+    src/staticData.ts   import.meta.glob of public/data/**, used by the file:// build
+    src/audioSync.ts    audio events, active cue/word lookup, highlighting, scrolling
+    src/renderer.ts     renders chunk rows (Cyrillic / transliteration / English)
+    src/styles.css      layout and styling
 
-types.ts: TypeScript interfaces for ru.json, en.json, chunks.json, cues.json
+## How sync works
 
-dataLoader.ts: fetch and parse JSON files
+- `timeupdate` (fires about 4 times per second) and `seeked` drive
+  `attachAudioSync`. A binary search finds the active cue, then the active word.
+- The Cyrillic and transliteration columns are rendered as one `<span class="word">`
+  per whitespace-separated word, with `data-paragraph-id` and `data-word-index`.
+  The active word is the cue's word `i`, highlighted as span `i + wordOffset`,
+  in both columns.
+- Scrolling follows the active word with a smoothed (lerp, factor 0.008)
+  `requestAnimationFrame` loop; seeks scroll instantly.
+- Paragraphs without a cue are rendered but never highlighted.
 
-audioSync.ts: handle audio events, resolve active paragraph, manage highlighting
+## Development
 
-renderer.ts: render chunks into DOM and manage scroll behavior
+    npm install
+    npm run dev
 
-styles.css: layout and presentation (CSS grid recommended for column layout)
-
-Development workflow:
-
-Run npm install
-
-Run npm run dev
-
-Vite serves the app locally with hot reload
-
-JSON and audio files are served from the public/ directory
-
-The application is entirely static. No backend server is required at runtime. All synchronization logic happens in the browser using the precomputed JSON artifacts.
-
-This design keeps the web layer simple, deterministic, and fully decoupled from the alignment and chunking tools.
-
-
+Vite serves the app with hot reload; JSON and audio are served from `public/`.
 
 ## Building a static bundle
 
-To build a self-contained static site (no server required):
+The static build works from `file://` without a server.
 
-1. Copy web/src/staticData.example.ts to web/src/staticData.ts
-2. Replace <bookId> with your book ID (e.g. pushkin_kd)
-3. Ensure all cues files exist in web/public/data/<bookId>/cues/
-4. Run: npm run build
-5. The dist/ folder contains the complete static site.
-   Open dist/index.html directly in a browser alongside the audio files.
-   
+1. Make sure `.env.local` sets `VITE_BOOK_ID`.
+2. Make sure `public/data/<bookId>/` contains `ru.json`, `en.json`, `chunks.json`,
+   `audio_index.json` and all `cues/*.json`. `src/staticData.ts` bundles them at build time.
+3. Run `npm run build`.
+4. Open `dist/index.html` in a browser. Vite copies `public/` into `dist/`, so
+   the audio ends up in `dist/data/<bookId>/audio/`. The audio is loaded from
+   `./data/<bookId>/<audioFile>` in the static build (`/data/...` in dev).
+   Note: the audio is not redistributable unless you have the rights to it.
+
+`vite.config.ts` sets `base: './'` and strips `crossorigin` and `type="module"`
+from the built `index.html`, which `file://` needs.

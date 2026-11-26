@@ -53,6 +53,11 @@ Java / Maven. Uses an LLM to align Russian and English paragraphs into
 display chunks. Each chunk is one row in the reader. Processes the book
 in windows of approximately 60 Russian paragraphs, allowing the LLM to
 choose a natural semantic boundary between 55 and 65 paragraphs per window.
+Each request also includes a Russian overlap of 10 paragraphs and an English
+window with a 15-paragraph start overlap and a 120-paragraph lookahead.
+The response is strictly validated; on failure the window is retried with
+stricter instructions (up to 4 attempts). HTTP 429 responses are retried
+with backoff.
 
   java -jar chunk.jar <dataDir> <bookId>
 
@@ -63,14 +68,17 @@ Input:  ru.json, en.json
 Output: chunks.json
 
 Requires: ANTHROPIC_API_KEY environment variable
+Model:    claude-sonnet-4-6 (constant in Main.java)
 
 ---
 
 ### 3. segment
 Java / Maven. Scans ru.json for chapter heading paragraphs (paragraphs
-starting with "Глава") and pairs them with sorted MP3 files in the audio
-directory to generate audio_index.json. Sets startParagraph,
-contentStartParagraph, and endParagraph for each segment automatically.
+starting with "Глава", case-insensitive) and pairs them with MP3 files in the
+audio directory, sorted by file name, to generate audio_index.json. Sets
+id (s001, s002, ...), title, audioFile, startParagraph, contentStartParagraph,
+and endParagraph for each segment automatically. Warns if the number of
+chapters differs from the number of MP3 files.
 Run once per book, and re-run if audio files or source text change.
 
   java -jar segment.jar <dataDir> <bookId>
@@ -85,7 +93,9 @@ Output: audio_index.json
 
 ### 4. transcribe
 Python / WhisperX. Transcribes one audio file and writes a flat word list
-with timestamps. Run once per audio segment.
+with timestamps. Run once per audio segment. This is the slow step (CPU,
+model "medium", int8, language "ru"), so keep the output.
+Use a Python 3.12 virtualenv; WhisperX/torch did not work on Python 3.14.
 
   python transcribe.py <audioFile> <outWordsJson>
 
@@ -104,7 +114,10 @@ file and write each output to words/s001.json through words/s014.json.
 ### 5. align
 Java / Maven. Matches word timestamps to Russian paragraphs using fuzzy
 matching with Levenshtein distance and read-ahead lookahead. Writes cue
-files for the web reader. Run once per segment.
+files for the web reader. Run once per segment. It first locates the chapter
+heading (startParagraph) in the transcript as an anchor, then matches each
+paragraph from contentStartParagraph to endParagraph in order. Diagnostics
+(unmatched paragraphs, match counts) are printed to stderr.
 
   java -jar align.jar <dataDir> <bookId> <segmentId>
 
@@ -199,6 +212,7 @@ To align all segments in a batch:
         "paragraphId": "ru-000002",
         "start": 34.402,
         "end": 47.836,
+        "wordOffset": 0,
         "words": [
           { "text": "Отец", "start": 34.402, "end": 34.822 }
         ]
@@ -206,6 +220,8 @@ To align all segments in a batch:
     ]
   }
 
+  wordOffset: number of leading paragraph tokens the transcript did not
+  contain; the web reader highlights span (i + wordOffset) for words[i].
   Paragraphs with no match are omitted. The web app renders all
   paragraphs but only highlights matched ones.
 
@@ -216,16 +232,18 @@ To align all segments in a batch:
 Static TypeScript/Vite application. No backend required at runtime.
 
 Place all JSON and audio files under web/public/data/<bookId>/.
+Copy web/.env.example to web/.env.local and set VITE_BOOK_ID to the book ID.
 Run with: npm run dev
 
 The production build (npm run build) produces a standalone dist/ folder
 that can be opened directly from the filesystem via file:// without a server.
+See web/README.md for details.
 
 Behavior:
 - Loads ru.json, en.json, chunks.json, audio_index.json on startup
 - Renders the full book as a scrollable list of chunk rows
 - Each row shows Russian (Cyrillic), transliteration, and English side by side
-- Audio controls and chapter selector are fixed at the top of the page
+- Audio controls, chapter selector and playback speed (0.5x to 1.5x) are fixed at the top of the page
 - When audio plays, the active paragraph is highlighted and scrolled into view
 - The active word within the paragraph is highlighted in the Cyrillic column
 - Cues for each segment are loaded on demand when that segment is selected
