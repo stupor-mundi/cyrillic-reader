@@ -62,9 +62,12 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
 - Quirks found in `chunk` and left as they are (locked in by tests):
   - A reply that is not parseable JSON fails the whole run immediately; only replies that parse but fail
     validation are retried (up to 4 attempts).
-  - `src/main/resources/prompt.txt` is not used by the code (the prompt is built in `PromptBuilder`), and it
-    describes a different format (no `lastRuCovered`). Candidate for deletion.
-  - `picocli` and `picocli-codegen` in the pom are unused.
+  - (Resolved, see "Cleanup" below.) `prompt.txt` was unused and `picocli` was unused.
+- Cleanup (`[idle]`, verified with `mvn clean package` in all three tools):
+  - Deleted `tools/chunk/src/main/resources/prompt.txt` (nothing read it; it described an older format).
+  - `chunk` pom: removed unused `picocli` and `picocli-codegen` and the annotation-processor block; now uses
+    the same layout, Jackson (2.18.2) and Shade (3.5.1) versions as the other tools (was Jackson 2.17.2, Shade 3.6.0).
+  - `segment` pom: removed unused `icu4j`.
 - Next: `align` tests and refactor on the laptop (add the JUnit dependency and Surefire plugin to its pom first,
   then simulated-ASR-error tests before changing the matcher).
 
