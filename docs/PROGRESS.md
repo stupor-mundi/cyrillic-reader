@@ -10,6 +10,10 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
 - `[laptop]` Check the renderer vs aligner token count mismatch (standalone `—` etc.) on real data.
 - `[laptop]` Web: drive highlight from `requestAnimationFrame` + small lead instead of `timeupdate`.
 - `[idle]` Small safe fixes (see "Open small tasks").
+- Undecided: a parent pom (`tools/pom.xml`) for shared Java and plugin versions. Leaning against it for now (the four
+  poms are short and were just aligned). Revisit if more tools are added or the poms drift again; the clean moment
+  is after `align` gets its JUnit setup, so all four convert together. A `tools/build-all` script was suggested as a
+  lighter alternative.
 
 ### Open small tasks (safe for the idle machine)
 
