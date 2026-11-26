@@ -10,14 +10,13 @@ data/
 *.ogg
 *.vtt
 *.srt
-*.json
 
-# If you want to keep schemas or example JSON,
-# move them to shared/ and remove *.json above.
+# Generated book data lives under data/ (matched above, including web/public/data/).
+# Do not ignore *.json globally: web/package.json and web/tsconfig.json must be tracked.
 
 
 ################################################
-# JAVA / MAVEN (translit tool)
+# JAVA / MAVEN (tools/*)
 ################################################
 
 # Maven build output
