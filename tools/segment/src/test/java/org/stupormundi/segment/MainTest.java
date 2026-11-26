@@ -9,11 +9,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Characterization tests for audio file listing and the end-to-end run. */
+/** End-to-end characterization tests: ru.json and audio files in, audio_index.json out. */
 class MainTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -43,21 +42,6 @@ class MainTest {
     private JsonNode runAndRead(Path book) throws IOException {
         Main.main(new String[] {dataDir.toString(), "book"});
         return MAPPER.readTree(book.resolve("audio_index.json").toFile());
-    }
-
-    @Test
-    void listAudioFilesReturnsOnlyMp3FilesSortedByName() throws IOException {
-        Path audio = Files.createDirectories(dataDir.resolve("audio"));
-        Files.writeString(audio.resolve("02_b.MP3"), "");
-        Files.writeString(audio.resolve("01_a.mp3"), "");
-        Files.writeString(audio.resolve("notes.txt"), "");
-        Files.createDirectories(audio.resolve("nested.mp3"));
-
-        List<String> names = Main.listAudioFiles(audio).stream()
-                .map(p -> p.getFileName().toString())
-                .toList();
-
-        assertEquals(List.of("01_a.mp3", "02_b.MP3"), names);
     }
 
     @Test

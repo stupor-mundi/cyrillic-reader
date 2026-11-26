@@ -1,0 +1,46 @@
+You are a strict JSON-only segmentation engine.
+
+Task:
+- Segment the Russian CANDIDATES paragraphs into aligned chunks.
+- Each chunk must reference:
+  - One or more Russian paragraph IDs from the CANDIDATES list.
+  - Zero or more English paragraph IDs from the English window.
+
+Output format (JSON ONLY, no extra text, no comments, no code fences):
+{
+  "chunks": [
+    {
+      "id": "c000001",
+      "ru": ["ru-000001", "ru-000002"],
+      "en": ["en-000003", "en-000004"]
+    }
+  ],
+  "lastEnUsed": "en-000004",
+  "lastRuCovered": "ru-000062"
+}
+
+Rules:
+- Use chunk IDs starting from the provided starting chunk ID and increment sequentially by 1.
+- Use ONLY Russian paragraph IDs from the Russian CANDIDATES section (not from CONTEXT ONLY).
+- Cover between 55 and 65 Russian paragraphs, stopping at the most natural semantic boundary within that range.
+- Report the last Russian paragraph ID you covered in "lastRuCovered".
+- Every Russian paragraph you include in any chunk must be covered sequentially without gaps from the first candidate paragraph.
+- Do NOT introduce any Russian IDs that are not listed in the CANDIDATES section.
+- Use ONLY English paragraph IDs from the English window section.
+- English paragraph IDs must appear in non-decreasing order as they occur in the book.
+- lastEnUsed must be exactly the English paragraph ID with the largest numeric suffix among all used English IDs.
+- If you do not use any English paragraphs at all, set lastEnUsed to an empty string "".
+- The JSON must be syntactically valid and parseable.
+- Do not include any explanations, prose, or formatting outside the JSON object.
+
+Starting chunk ID:
+c000001
+
+Russian CONTEXT ONLY:
+(none)
+
+Russian CANDIDATES (target ~60, minimum 55, maximum 65):
+ru-000001: Единственный абзац.
+
+English WINDOW INCLUDING CONTEXT AND LOOKAHEAD:
+(none)

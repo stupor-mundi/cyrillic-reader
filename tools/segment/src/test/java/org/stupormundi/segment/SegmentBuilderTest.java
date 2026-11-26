@@ -8,13 +8,13 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** Characterization tests for {@link Main#buildSegments(List)}. */
-class BuildSegmentsTest {
+/** Characterization tests for {@link SegmentBuilder}. */
+class SegmentBuilderTest {
 
-    private static List<Main.Paragraph> paragraphs(String... texts) {
-        List<Main.Paragraph> list = new ArrayList<>();
+    private static List<Paragraph> paragraphs(String... texts) {
+        List<Paragraph> list = new ArrayList<>();
         for (int i = 0; i < texts.length; i++) {
-            Main.Paragraph p = new Main.Paragraph();
+            Paragraph p = new Paragraph();
             p.id = String.format("ru-%06d", i + 1);
             p.cyr = texts[i];
             list.add(p);
@@ -24,19 +24,19 @@ class BuildSegmentsTest {
 
     @Test
     void buildsOneSegmentPerChapterHeading() {
-        List<Main.Segment> segments = Main.buildSegments(paragraphs(
+        List<Segment> segments = SegmentBuilder.build(paragraphs(
                 "Глава I", "text a", "text b",
                 "Глава II", "text c"));
 
         assertEquals(2, segments.size());
 
-        Main.Segment first = segments.get(0);
+        Segment first = segments.get(0);
         assertEquals("Глава I", first.title);
         assertEquals("ru-000001", first.startParagraph);
         assertEquals("ru-000002", first.contentStartParagraph);
         assertEquals("ru-000003", first.endParagraph);
 
-        Main.Segment second = segments.get(1);
+        Segment second = segments.get(1);
         assertEquals("Глава II", second.title);
         assertEquals("ru-000004", second.startParagraph);
         assertEquals("ru-000005", second.contentStartParagraph);
@@ -45,33 +45,33 @@ class BuildSegmentsTest {
 
     @Test
     void lastChapterRunsToTheEndOfTheBook() {
-        List<Main.Segment> segments = Main.buildSegments(paragraphs("Глава I", "a", "b", "c"));
+        List<Segment> segments = SegmentBuilder.build(paragraphs("Глава I", "a", "b", "c"));
         assertEquals("ru-000004", segments.get(0).endParagraph);
     }
 
     @Test
     void paragraphsBeforeTheFirstChapterBelongToNoSegment() {
-        List<Main.Segment> segments = Main.buildSegments(paragraphs("Предисловие", "Глава I", "a"));
+        List<Segment> segments = SegmentBuilder.build(paragraphs("Предисловие", "Глава I", "a"));
         assertEquals(1, segments.size());
         assertEquals("ru-000002", segments.get(0).startParagraph);
     }
 
     @Test
     void headingDetectionIgnoresCaseAndLeadingWhitespace() {
-        List<Main.Segment> segments = Main.buildSegments(paragraphs("  ГЛАВА I", "a", "\tглава II", "b"));
+        List<Segment> segments = SegmentBuilder.build(paragraphs("  ГЛАВА I", "a", "\tглава II", "b"));
         assertEquals(2, segments.size());
     }
 
     @Test
     void anyParagraphStartingWithGlavaCountsAsAHeading() {
         // Known quirk: the check is a plain prefix test, so "Главарь ..." (gang leader) matches too.
-        List<Main.Segment> segments = Main.buildSegments(paragraphs("Глава I", "a", "Главарь шайки молчал.", "b"));
+        List<Segment> segments = SegmentBuilder.build(paragraphs("Глава I", "a", "Главарь шайки молчал.", "b"));
         assertEquals(2, segments.size());
     }
 
     @Test
     void headingFollowedByAnotherHeadingUsesItselfAsContentStart() {
-        List<Main.Segment> segments = Main.buildSegments(paragraphs("Глава I", "Глава II", "a"));
+        List<Segment> segments = SegmentBuilder.build(paragraphs("Глава I", "Глава II", "a"));
         assertEquals(2, segments.size());
         assertEquals("ru-000001", segments.get(0).startParagraph);
         assertEquals("ru-000001", segments.get(0).contentStartParagraph);
@@ -80,8 +80,8 @@ class BuildSegmentsTest {
 
     @Test
     void headingAsTheFinalParagraphUsesItselfAsContentStart() {
-        List<Main.Segment> segments = Main.buildSegments(paragraphs("Глава I", "a", "Глава II"));
-        Main.Segment last = segments.get(1);
+        List<Segment> segments = SegmentBuilder.build(paragraphs("Глава I", "a", "Глава II"));
+        Segment last = segments.get(1);
         assertEquals("ru-000003", last.startParagraph);
         assertEquals("ru-000003", last.contentStartParagraph);
         assertEquals("ru-000003", last.endParagraph);
@@ -89,7 +89,7 @@ class BuildSegmentsTest {
 
     @Test
     void idAndAudioFileAreNotSetHere() {
-        Main.Segment segment = Main.buildSegments(paragraphs("Глава I", "a")).get(0);
+        Segment segment = SegmentBuilder.build(paragraphs("Глава I", "a")).get(0);
         assertNull(segment.id);
         assertNull(segment.audioFile);
     }
@@ -97,14 +97,14 @@ class BuildSegmentsTest {
     @Test
     void throwsWhenThereIsNoChapterHeading() {
         IllegalStateException e = assertThrows(
-                IllegalStateException.class, () -> Main.buildSegments(paragraphs("a", "b")));
+                IllegalStateException.class, () -> SegmentBuilder.build(paragraphs("a", "b")));
         assertEquals("No chapter markers found (paragraphs starting with 'Глава')", e.getMessage());
     }
 
     @Test
     void nullTextIsTreatedAsNotAHeading() {
-        List<Main.Paragraph> list = paragraphs("Глава I", "a");
+        List<Paragraph> list = paragraphs("Глава I", "a");
         list.get(1).cyr = null;
-        assertEquals(1, Main.buildSegments(list).size());
+        assertEquals(1, SegmentBuilder.build(list).size());
     }
 }

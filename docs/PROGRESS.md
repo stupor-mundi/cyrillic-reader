@@ -41,8 +41,32 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
   - `chunk` still has only the smoke test.
 - Known quirk locked in by a test: `segment` treats any paragraph starting with "глава" as a chapter
   heading, so a paragraph like "Главарь шайки молчал." would also start a chapter.
-- Next: tests for `chunk` (validation logic, prompt building) with a faked API client, then refactor out of
-  `Main.java`. `align` tests and refactor on the laptop.
+- Refactored `textprep` and `segment` out of their single `Main.java` (behaviour unchanged; tests pass, jars build):
+  - `textprep`: `Main` (CLI and file I/O), `TextCleaner`, `ParagraphSplitter` (the four duplicated "closest split
+    point" loops are now one helper), `ParagraphJson`, `Language`. 21 tests.
+  - `segment`: `Main` (CLI and error handling), `AudioIndexGenerator`, `SegmentBuilder`, `AudioFiles`, and the
+    JSON model classes `RuBook`, `Paragraph`, `Segment`, `AudioIndex`. 14 tests.
+  - One intended difference: `textprep` now writes paragraph keys in a fixed order (`id`, `cyr`, `lat` / `id`,
+    `text`); before, the key order was unspecified. The content is the same.
+- Refactored `chunk` and added tests (57 pass, jar builds, no real API call made anywhere):
+  - Split `Main.java` into: `Main` (CLI), `ChunkAligner` (window loop and retries), `PromptBuilder`,
+    `WindowValidator`, `ResponseParser`, `AnthropicClient` (HTTP, 429 backoff), `ChunkIds`, `ChunkSettings`
+    (window sizes), `Json`, and the model classes `RuBook`, `EnBook`, `RuParagraph`, `EnParagraph`, `Chunk`,
+    `ChunkWindowResponse`.
+  - New seam: interface `LlmClient` (`String complete(String prompt)`). `ChunkAligner` takes one, so tests use a
+    fake model. `AnthropicClient` is the only real implementation.
+  - `PromptBuilder` is checked against golden files (`src/test/resources/org/stupormundi/chunk/*.golden.txt`)
+    captured from the code before the split, so the prompt is byte-for-byte unchanged.
+  - Tests: `WindowValidatorTest` (26), `ChunkAlignerTest` (11, including multi-window continuation and the retry
+    ladder), `ResponseParserTest` (7), `ChunkIdsTest` (6), `AnthropicClientTest` (4), `PromptBuilderTest` (3).
+- Quirks found in `chunk` and left as they are (locked in by tests):
+  - A reply that is not parseable JSON fails the whole run immediately; only replies that parse but fail
+    validation are retried (up to 4 attempts).
+  - `src/main/resources/prompt.txt` is not used by the code (the prompt is built in `PromptBuilder`), and it
+    describes a different format (no `lastRuCovered`). Candidate for deletion.
+  - `picocli` and `picocli-codegen` in the pom are unused.
+- Next: `align` tests and refactor on the laptop (add the JUnit dependency and Surefire plugin to its pom first,
+  then simulated-ASR-error tests before changing the matcher).
 
 ### 2026-11-26 `[idle]`
 
