@@ -13,6 +13,12 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error('Container element with id "app" not found');
       }
 
+      /** URL of a segment's audio: absolute URLs are used as they are, files are looked up under the book. */
+      const audioUrl = (audioFile: string): string =>
+        /^https?:\/\//.test(audioFile) || audioFile.startsWith("/")
+          ? audioFile
+          : `${dataBase}/${bookId}/${audioFile}`;
+
       const bookData = await loadBook(bookId);
       renderChapter(container, bookData);
 
@@ -31,13 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const audio = document.createElement("audio");
       audio.controls = true;
 
-      const audioFile = segment.audioFile;
-
-      if (/^https?:\/\//.test(audioFile) || audioFile.startsWith("/")) {
-        audio.src = audioFile;
-      } else {
-        audio.src = `${dataBase}/${bookId}/${audioFile}`;
-      }
+      audio.src = audioUrl(segment.audioFile);
 
       audioBar.appendChild(audio);
 
@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
       for (const s of segments) {
         const opt = document.createElement("option");
         opt.value = s.id;
-        opt.textContent = s.id;
+        opt.textContent = s.title ? `${s.id.replace(/^s0*/, "")}. ${s.title}` : s.id;
         chapterSelect.appendChild(opt);
       }
       chapterSelect.value = segment.id;
@@ -65,7 +65,10 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       audioBar.appendChild(speedSelect);
       speedSelect.addEventListener("change", () => {
-        audio.playbackRate = parseFloat(speedSelect.value);
+        const rate = parseFloat(speedSelect.value);
+        // The default rate survives a change of `src`; the current rate alone is reset by it.
+        audio.defaultPlaybackRate = rate;
+        audio.playbackRate = rate;
       });
 
 
@@ -85,7 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!nextSegment) return;
         const nextCues = await loadSegmentCues(bookId, nextSegment.id);
 
-        audio.src = `${dataBase}/${bookId}/${nextSegment.audioFile}`;
+        audio.src = audioUrl(nextSegment.audioFile);
 
         detach();
         detach = attachAudioSync({ ...baseSyncOpts, cues: nextCues });

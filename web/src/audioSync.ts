@@ -59,7 +59,7 @@ function findSpanIndexForCue(cue: Cue, time: number): number {
   if (cue.wordStarts && cue.wordStarts.length > 0) {
     return findStartIndex(cue.wordStarts, time);
   }
-  const words = (cue as Cue & { words?: readonly { start: number; end: number }[] }).words;
+  const words = cue.words;
   if (!words || words.length === 0) return -1;
   const wordIndex = findWordIndex(words, time);
   if (wordIndex < 0) return -1;

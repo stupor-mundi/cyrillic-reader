@@ -6,11 +6,8 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
 
 ## Next / blocked on the other machine
 
-- `[laptop]` Measure sync error (hand-time about 15 words per chapter) before changing the aligner.
 - `[laptop]` Listen-check the new `wordStarts` (sample about 15 words per chapter); the automated check
   agrees with the aligner by construction, so it is not independent proof.
-- `[laptop]` Listen to the reader and tune the highlight lead (`?lead=0.05` ... `?lead=0.25` in the URL); set
-  `DEFAULT_LEAD_SECONDS` in `web/src/audioSync.ts` to what feels right.
 - `[idle]` Small safe fixes (see "Open small tasks").
 - Undecided: a parent pom (`tools/pom.xml`) for shared Java and plugin versions. Leaning against it for now (the four
   poms are short and were just aligned). Revisit if more tools are added or the poms drift again; the clean moment
@@ -19,15 +16,24 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
 
 ### Open small tasks (safe for the idle machine)
 
-- Chapter selector shows `s.id` (e.g. `s001`); show `s.title` instead (`web/src/main.ts`).
-- After a chapter switch, `main.ts` builds the audio path without the absolute-URL branch used on first load.
-- `web/src/types.ts`: add `words` to `Cue`; remove the cast in `audioSync.ts`.
-- `web/src/dataLoader.ts`: `AudioSegment` has a `cuesFile` field that `audio_index.json` doesn't have.
-- Root `.gitignore`: ignores every `*.json` (would hide e.g. `web/package.json`); a comment still says "translit tool".
-  Prefer ignoring only `data/` and `web/public/data/`.
 - Transliteration show/hide toggle.
+- Chapter switching has no guard against two quick switches overlapping (the slower cue load could win).
 
 ## Log
+
+### 2026-11-27 `[laptop]` (small web fixes, lead accepted)
+
+- The author listened to the reader: tracking "seems quite good now" with the default lead of 0.12 s, which
+  stays as `DEFAULT_LEAD_SECONDS` (`?lead=` remains for tuning).
+- Web fixes: the chapter selector shows the chapter number and title (`1. Глава I. Сержант гвардии`); a single
+  `audioUrl()` helper builds the audio path for the first load and for chapter switches (the switch used to skip
+  the absolute-URL case); the speed also sets `defaultPlaybackRate`, because a browser resets `playbackRate`
+  when `src` changes (so the menu could say 1.5x while the audio played at 1x; I did not reproduce the bug
+  before the fix); `Cue` in `types.ts` now has `words`/`CueWord` and the cast in `audioSync.ts` is gone;
+  `AudioSegment.cuesFile`, which `audio_index.json` never had, is removed. The root `.gitignore` no longer
+  ignores every `*.json` (it was already fixed; the note was stale).
+- Browser check (dev server): at 1.5x the speed survives a switch to s002, the right file plays, and 49 of 49
+  highlight samples were within one word of the cue data.
 
 ### 2026-11-27 `[laptop]` (per-word times, matcher rewrite, rAF highlight)
 

@@ -94,7 +94,7 @@ approximate, and the new cues have not been listened to yet.
 
 1. **Web layer (fixed 2026-11-27).** `timeupdate` fires about 4 times a second and there was no lead
    offset, so the highlight could trail the audio by up to about 250 ms. Now driven by
-   `requestAnimationFrame` with a 120 ms lead (`?lead=` in the URL to tune). Not yet judged by ear.
+   `requestAnimationFrame` with a 120 ms lead (`?lead=` in the URL to tune); judged good by ear.
 2. **Align, wrong words.** `wordOffset` only handles words dropped at the start of a
    paragraph. A word dropped, merged or split mid-paragraph shifts the rest of the paragraph.
 3. **Tokenization mismatch (confirmed on real data 2026-11-27, fixed by `wordStarts`).**
@@ -193,7 +193,7 @@ copy the existing files aside before running a tool on a real book.
 1. **Sync timing and alignment quality.**
    - Measure first: hand-time about 15 words per chapter; report median and worst error.
    - Done 2026-11-27: highlight driven from `requestAnimationFrame` reading `audio.currentTime`, with a
-     lead of 0.12 s (tunable). Still to do: choose the final lead by listening.
+     lead of 0.12 s (tunable with `?lead=`). The author found tracking good by ear with that default.
    - Done 2026-11-27: chapter-wide sequence alignment of the book's words to the transcript, and a
      time for every book word (`wordStarts`, interpolated where unheard). `wordOffset` is only kept for
      old cues. Still to do: phonetic similarity or an LLM pass for badly heard words.

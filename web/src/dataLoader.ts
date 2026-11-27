@@ -5,7 +5,6 @@ export interface AudioSegment {
   id: string;
   title?: string;
   audioFile: string;
-  cuesFile: string;
 }
 
 export interface AudioIndexJson {

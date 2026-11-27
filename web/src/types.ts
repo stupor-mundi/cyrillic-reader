@@ -34,10 +34,18 @@ export interface ChunksJson {
 }
 
 // cues.json – Cueing output
+/** A word as heard in the audio (WhisperX output), with its time span in seconds. */
+export interface CueWord {
+  readonly text: string;
+  readonly start: number;
+  readonly end: number;
+}
+
 export interface Cue {
   readonly paragraphId: string;
   readonly start: number;
   readonly end: number;
+  readonly words?: readonly CueWord[];
   readonly wordOffset?: number;
   /** Start time of each whitespace-separated word of the paragraph's Cyrillic text, in order. */
   readonly wordStarts?: readonly number[];
