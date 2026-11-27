@@ -21,11 +21,14 @@ and active word as the audiobook plays.
   [5. align]     →  cues/<segmentId>.json      (one per audio file)
        ↓
   [web reader]   ←  ru.json + en.json + chunks.json + audio_index.json
-                    + cues/<segmentId>.json + audio/<segmentId>.mp3
+                    + cues/<segmentId>.json + audio/<file>.mp3
 
 ---
 
 ## Tools
+
+The Java tools are built with `mvn package` in their own folder (`tools/<tool>/`); the runnable jar is
+`target/<tool>-0.1.0.jar`, and the examples below are run from that folder.
 
 ### 1. textprep
 Java / Maven. Splits Russian and English source texts into paragraphs,
@@ -33,10 +36,10 @@ assigns stable IDs, and generates transliteration for Russian.
 Strips footnote markers, invisible Unicode characters, and splits
 paragraphs longer than 1200 characters at natural sentence boundaries.
 
-  java -jar textprep.jar <dataDir> <bookId>
+  java -jar target/textprep-0.1.0.jar <dataDir> <bookId>
 
 Example:
-  java -jar textprep.jar ../../data pushkin_kd
+  java -jar target/textprep-0.1.0.jar ../../data pushkin_kd
 
 Input:
   <dataDir>/<bookId>/ru.txt
@@ -59,16 +62,16 @@ The response is strictly validated; on failure the window is retried with
 stricter instructions (up to 4 attempts). HTTP 429 responses are retried
 with backoff.
 
-  java -jar chunk.jar <dataDir> <bookId>
+  java -jar target/chunk-0.1.0.jar <dataDir> <bookId>
 
 Example:
-  java -jar chunk.jar ../../data pushkin_kd
+  java -jar target/chunk-0.1.0.jar ../../data pushkin_kd
 
 Input:  ru.json, en.json
 Output: chunks.json
 
 Requires: ANTHROPIC_API_KEY environment variable
-Model:    claude-sonnet-4-6 (constant in Main.java)
+Model:    claude-sonnet-4-6 (constant in AnthropicClient.java; window sizes in ChunkSettings.java)
 
 ---
 
@@ -81,10 +84,10 @@ and endParagraph for each segment automatically. Warns if the number of
 chapters differs from the number of MP3 files.
 Run once per book, and re-run if audio files or source text change.
 
-  java -jar segment.jar <dataDir> <bookId>
+  java -jar target/segment-0.1.0.jar <dataDir> <bookId>
 
 Example:
-  java -jar segment.jar ../../data pushkin_kd
+  java -jar target/segment-0.1.0.jar ../../data pushkin_kd
 
 Input:  ru.json, audio/*.mp3
 Output: audio_index.json
@@ -112,17 +115,19 @@ file and write each output to words/s001.json through words/s014.json.
 ---
 
 ### 5. align
-Java / Maven. Matches word timestamps to Russian paragraphs using fuzzy
-matching with Levenshtein distance and read-ahead lookahead. Writes cue
+Java / Maven. Matches word timestamps to Russian paragraphs and writes cue
 files for the web reader. Run once per segment. It first locates the chapter
-heading (startParagraph) in the transcript as an anchor, then matches each
-paragraph from contentStartParagraph to endParagraph in order. Diagnostics
-(unmatched paragraphs, match counts) are printed to stderr.
+heading (startParagraph) in the transcript as an anchor, then aligns all words
+of the paragraphs from contentStartParagraph to endParagraph to the transcript
+words in one order-preserving pass (so a wrong match cannot jump ahead and
+swallow the paragraphs after it), and derives one cue per paragraph plus a start
+time for every displayed word (`wordStarts`). See tools/align/README.md.
+Diagnostics (unmatched paragraphs, match counts) are printed to stderr.
 
-  java -jar align.jar <dataDir> <bookId> <segmentId>
+  java -jar target/align-0.1.0.jar <dataDir> <bookId> <segmentId>
 
 Example:
-  java -jar align.jar ../../data pushkin_kd s001
+  java -jar target/align-0.1.0.jar ../../data pushkin_kd s001
 
 Input:  words/s001.json, ru.json, audio_index.json
 Output: cues/s001.json
@@ -130,7 +135,7 @@ Output: cues/s001.json
 To align all segments in a batch:
 
   for i in $(seq -f "%03g" 1 14); do
-    java -jar target/align.jar ../../data pushkin_kd s$i
+    java -jar target/align-0.1.0.jar ../../data pushkin_kd s$i
   done
 
 ---
@@ -206,7 +211,7 @@ To align all segments in a batch:
 ### cues/s001.json
   {
     "bookId": "pushkin_kd",
-    "audioFile": "01_glava-1.mp3",
+    "audioFile": "audio/01_glava-1.mp3",
     "cues": [
       {
         "paragraphId": "ru-000002",
@@ -252,7 +257,7 @@ Behavior:
 - Each row shows Russian (Cyrillic), transliteration, and English side by side
 - Audio controls, chapter selector and playback speed (0.5x to 1.5x) are fixed at the top of the page
 - When audio plays, the active paragraph is highlighted and scrolled into view
-- The active word within the paragraph is highlighted in the Cyrillic column
+- The active word within the paragraph is highlighted in the Cyrillic and transliteration columns
 - Cues for each segment are loaded on demand when that segment is selected
 - Paragraphs with no cue are rendered normally but not highlighted
 

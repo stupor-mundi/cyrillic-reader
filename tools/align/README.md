@@ -10,11 +10,11 @@ Run the transcribe tool first to produce the words JSON for each segment:
 
 ## Usage
 
-    java -jar align.jar <dataDir> <bookId> <segmentId>
+    java -jar target/align-0.1.0.jar <dataDir> <bookId> <segmentId>
 
 Example:
 
-    java -jar align.jar ../../data pushkin_kd s001
+    java -jar target/align-0.1.0.jar ../../data pushkin_kd s001
 
 ## Input
 
@@ -51,8 +51,8 @@ are omitted.
 2. All words of the paragraphs from `contentStartParagraph` to `endParagraph` are aligned to the
    transcript words after the anchor in one order-preserving pass (weighted longest common
    subsequence, `WordTimer.align`). Words are lowercased and reduced to letters, `ё` is folded to
-   `е`; equal words score 2, words of 4+ letters that differ by a few letters score 1, shorter
-   words only pair when equal. Because the alignment is global, a wrong match far from where a
+   `е`; equal words score 2, words of 4+ letters that differ by a few letters (1 edit for 4-letter
+   words, up to 2 for 5-8 letters, up to 3 for 9+) score 1, shorter words only pair when equal. Because the alignment is global, a wrong match far from where a
    paragraph belongs loses more than it gains, and cues never overlap or run backwards. (The old
    per-paragraph scan could jump far ahead on a false match and then lose every paragraph it
    skipped.)
@@ -75,3 +75,7 @@ Diagnostics (unmatched paragraphs and match counts) are printed to stderr.
 ## Build
 
     mvn package
+
+This also runs the tests and produces the runnable jar `target/align-0.1.0.jar`. To check that a
+change did not alter the matching on real data, run `tools/align/scripts/golden-check.sh data <bookId>` from the repository root
+(needs `jq`; see the comment at the top of the script).

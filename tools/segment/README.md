@@ -5,11 +5,11 @@ the MP3 files, producing `audio_index.json`.
 
 ## Usage
 
-    java -jar segment.jar <dataDir> <bookId>
+    java -jar target/segment-0.1.0.jar <dataDir> <bookId>
 
 Example:
 
-    java -jar segment.jar ../../data pushkin_kd
+    java -jar target/segment-0.1.0.jar ../../data pushkin_kd
 
 ## Input
 

@@ -6,11 +6,11 @@ paragraphs, assigns stable IDs, and transliterates the Russian
 
 ## Usage
 
-    java -jar textprep.jar <dataDir> <bookId>
+    java -jar target/textprep-0.1.0.jar <dataDir> <bookId>
 
 Example:
 
-    java -jar textprep.jar ../../data pushkin_kd
+    java -jar target/textprep-0.1.0.jar ../../data pushkin_kd
 
 ## Input
 

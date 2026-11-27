@@ -12,8 +12,9 @@ There is no backend at runtime.
   `chunks.json`, `cues`), so field-name mismatches are caught early.
 - **No UI framework.** The app renders directly to the DOM; the UI is simple
   (chunk rows, an active chunk, scrolling).
-- **Native `<audio>`** provides play, pause and seek. The app listens to
-  `timeupdate` and `seeked` to find the active cue and word.
+- **Native `<audio>`** provides play, pause and seek. While it plays, a
+  `requestAnimationFrame` loop reads `audio.currentTime` to find the active cue and word; `seeked`,
+  `play`, `pause` and `ended` keep the highlight right otherwise (see "How sync works").
 
 ## Data
 

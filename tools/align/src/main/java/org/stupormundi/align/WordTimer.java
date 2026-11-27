@@ -167,7 +167,7 @@ final class WordTimer {
         if (Math.min(a.length(), b.length()) < 4) {
             return 0;
         }
-        int allowed = Math.min(3, (longest + 3) / 4); // 4-5 letters: 1, 6-9: 2, 10+: 3
+        int allowed = Math.min(3, (longest + 3) / 4); // 4 letters: 1, 5-8: 2, 9+: 3
         return levenshtein(a, b, allowed) <= allowed ? FUZZY : 0;
     }
 

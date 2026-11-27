@@ -5,14 +5,15 @@ display chunks (one row in the reader).
 
 ## Usage
 
-    java -jar chunk.jar <dataDir> <bookId>
+    java -jar target/chunk-0.1.0.jar <dataDir> <bookId>
 
 Example:
 
-    java -jar chunk.jar ../../data pushkin_kd
+    java -jar target/chunk-0.1.0.jar ../../data pushkin_kd
 
 Requires the `ANTHROPIC_API_KEY` environment variable. The model
-(`claude-sonnet-4-6`) and the window sizes are constants in `Main.java`.
+(`claude-sonnet-4-6`) is a constant in `AnthropicClient.java`; the window sizes are constants in
+`ChunkSettings.java`.
 
 ## Input / output
 

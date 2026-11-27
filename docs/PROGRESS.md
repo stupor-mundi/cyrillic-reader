@@ -21,6 +21,18 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
 
 ## Log
 
+### 2026-11-27 `[laptop]` (README audit against the code)
+
+- Checked every README against the code. Fixed: jar name (`target/<tool>-0.1.0.jar`, not `<tool>.jar`) in all
+  READMEs; the root README's `align` section (still described the old per-paragraph matcher), its cue example
+  (`audioFile` has the `audio/` prefix), the active word is highlighted in both the Cyrillic and transliteration
+  columns, the model/window constants live in `AnthropicClient.java` / `ChunkSettings.java` (not `Main.java`);
+  `web/README.md` still said the app listens to `timeupdate`/`seeked` only (it uses a rAF loop).
+- `tools/align/README.md`: exact fuzzy-match tolerance (1 edit for 4 letters, 2 for 5-8, 3 for 9+) and a pointer to
+  `golden-check.sh`. Fixed a wrong comment of the same rule in `WordTimer.java` (comment only, no behaviour change).
+- Checked and correct as written: `textprep`, `segment`, `transcribe` READMEs, chunk window sizes and retry counts,
+  `vite.config.ts` notes, `.env.example`.
+
 ### 2026-11-27 `[laptop]` (small web fixes, lead accepted)
 
 - The author listened to the reader: tracking "seems quite good now" with the default lead of 0.12 s, which
