@@ -1,7 +1,6 @@
 package org.stupormundi.align;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -10,16 +9,16 @@ import java.util.Set;
  * Turns the transcript words of one audio segment into one cue per matched paragraph.
  *
  * <p>The segment's anchor paragraph (the chapter heading) is located first, so the spoken preamble
- * before it is skipped. Then the paragraphs of the content range are matched in order, each search
- * starting after the previous match. Progress and problems are reported on stderr.
+ * before it is skipped. Then all words of the content range are aligned to the transcript in one
+ * ordered pass and a cue is derived for each paragraph. Progress and problems are reported on stderr.
  */
 final class Aligner {
 
-    /** Number of following paragraphs whose tokens are used as lookahead when matching. */
-    private static final int LOOKAHEAD_PARAGRAPHS = 2;
+    /** A paragraph gets a cue if at least this share of its words was paired with transcript words. */
+    private static final double MIN_MATCH_RATIO = 0.3;
 
-    /** A match may start this much (in seconds) before the end of the previous cue; earlier is rejected. */
-    private static final double MAX_OVERLAP_SECONDS = 1.0;
+    /** Most transcript words that may sit between two paired words of a paragraph (insertions). */
+    private static final int MAX_EXTRA_WORDS = 15;
 
     /** @param totalParagraphs number of paragraphs in the content range, matched or not */
     record Result(List<Cue> cues, int totalParagraphs) {}
@@ -48,37 +47,94 @@ final class Aligner {
         }
 
         List<Paragraph> paragraphs = index.paragraphs();
-        List<Cue> cues = new ArrayList<>();
-        double lastCueEndTime = 0.0;
-        for (int i = contentStartIdx; i <= endIdx; i++) {
-            Paragraph p = paragraphs.get(i);
-            String[] tokens = TextNormalizer.normalizeAndTokenize(p.cyr);
-            String[] lookaheadTokens = lookaheadTokens(paragraphs, i, endIdx);
-            FuzzyMatcher.MatchResult match = FuzzyMatcher.fuzzyMatch(tokens, lookaheadTokens, words, searchPos);
-            if (match == null) {
-                continue;
-            }
-            int first = match.firstMatchedWordIndex;
-            int last = match.lastMatchedWordIndex;
-            if (first < 0 || last < first || last >= words.size()) {
-                continue;
-            }
-            double cueStart = words.get(first).start;
-            if (cueStart < lastCueEndTime - MAX_OVERLAP_SECONDS) {
-                System.err.println("time-rejected: " + p.id
-                        + " matchStart=" + words.get(first).start
-                        + " lastCueEnd=" + lastCueEndTime
-                        + " firstIdx=" + first
-                        + " searchPos=" + searchPos);
-                continue;
-            }
-            cues.add(buildCue(p, words, first, last, match.wordOffset));
-            searchPos = last + 1;
-            lastCueEndTime = words.get(last).end;
-        }
-
+        List<Cue> cues = matchChapter(paragraphs, contentStartIdx, endIdx, words, searchPos);
         reportUnmatched(paragraphs, contentStartIdx, endIdx, cues);
         return new Result(cues, endIdx - contentStartIdx + 1);
+    }
+
+    /**
+     * Aligns all book words of the content range to the transcript words from {@code searchPos} on in
+     * one order-preserving pass, then derives one cue per paragraph from the words it was paired with.
+     * Because the alignment is global, a wrong match far from where a paragraph belongs cannot win, and
+     * cues can never overlap or run backwards.
+     */
+    private static List<Cue> matchChapter(List<Paragraph> paragraphs, int from, int to, List<Word> words,
+            int searchPos) {
+        List<String> bookTokens = new ArrayList<>();
+        List<Integer> firstTokenOfParagraph = new ArrayList<>();
+        for (int i = from; i <= to; i++) {
+            firstTokenOfParagraph.add(bookTokens.size());
+            for (String span : WordTimer.spans(paragraphs.get(i).cyr)) {
+                String folded = WordTimer.fold(span);
+                if (!folded.isEmpty()) {
+                    bookTokens.add(folded);
+                }
+            }
+        }
+        firstTokenOfParagraph.add(bookTokens.size());
+
+        String[] spoken = new String[Math.max(0, words.size() - searchPos)];
+        for (int j = 0; j < spoken.length; j++) {
+            spoken[j] = WordTimer.fold(words.get(searchPos + j).word);
+        }
+        int[] anchor = WordTimer.align(bookTokens.toArray(new String[0]), spoken);
+
+        List<Cue> cues = new ArrayList<>();
+        for (int i = from; i <= to; i++) {
+            int tokFrom = firstTokenOfParagraph.get(i - from);
+            int tokTo = firstTokenOfParagraph.get(i - from + 1);
+            Cue cue = cueFromAnchors(paragraphs.get(i), anchor, tokFrom, tokTo, words, searchPos);
+            if (cue != null) {
+                cues.add(cue);
+            }
+        }
+        return cues;
+    }
+
+    /**
+     * Builds the cue of one paragraph from the transcript words its tokens {@code [tokFrom, tokTo)} were
+     * paired with, or returns null if too few were. Paired words that lie far away from the rest (a
+     * spurious pairing of a common word) are ignored: only the largest group of close pairings is used.
+     */
+    private static Cue cueFromAnchors(Paragraph paragraph, int[] anchor, int tokFrom, int tokTo,
+            List<Word> words, int searchPos) {
+        int tokens = tokTo - tokFrom;
+        if (tokens == 0) {
+            return null;
+        }
+        // Split the pairings into groups: a new group starts when the transcript jumps more than
+        // MAX_EXTRA_WORDS beyond what the book words in between would need. Keep the largest group.
+        int bestFrom = -1;
+        int bestTo = -1;
+        int bestCount = 0;
+        int groupFrom = -1;
+        int groupCount = 0;
+        int prev = -1;
+        for (int t = tokFrom; t < tokTo; t++) {
+            if (anchor[t] < 0) {
+                continue;
+            }
+            if (prev >= 0 && (anchor[t] - anchor[prev]) - (t - prev) > MAX_EXTRA_WORDS) {
+                groupFrom = -1;
+                groupCount = 0;
+            }
+            if (groupFrom < 0) {
+                groupFrom = t;
+            }
+            groupCount++;
+            if (groupCount > bestCount) {
+                bestCount = groupCount;
+                bestFrom = groupFrom;
+                bestTo = t;
+            }
+            prev = t;
+        }
+        if (bestCount == 0 || bestCount < Math.max(1, (int) (MIN_MATCH_RATIO * tokens))) {
+            return null;
+        }
+        int first = searchPos + anchor[bestFrom];
+        int last = searchPos + anchor[bestTo];
+        return buildCue(paragraph, words, first, last, bestFrom - tokFrom);
     }
 
     /** Position in the transcript just after the anchor paragraph, or 0 (with a warning) if it is not found. */
@@ -90,19 +146,6 @@ final class Aligner {
         }
         System.err.println("Warning: anchor paragraph not matched, starting search from position 0.");
         return 0;
-    }
-
-    /** Tokens of the next paragraphs inside the content range, used only to anchor the match. */
-    private static String[] lookaheadTokens(List<Paragraph> paragraphs, int index, int endIdx) {
-        List<String> tokens = new ArrayList<>();
-        for (int offset = 1; offset <= LOOKAHEAD_PARAGRAPHS; offset++) {
-            int idx = index + offset;
-            if (idx > endIdx) {
-                break;
-            }
-            tokens.addAll(Arrays.asList(TextNormalizer.normalizeAndTokenize(paragraphs.get(idx).cyr)));
-        }
-        return tokens.toArray(new String[0]);
     }
 
     private static Cue buildCue(Paragraph paragraph, List<Word> words, int first, int last, int wordOffset) {
@@ -122,7 +165,16 @@ final class Aligner {
         cue.end = words.get(last).end;
         cue.wordOffset = wordOffset;
         cue.words = cueWords;
+        cue.wordStarts = roundMillis(WordTimer.wordStarts(paragraph.cyr, cueWords, cue.start, cue.end));
         return cue;
+    }
+
+    private static double[] roundMillis(double[] times) {
+        double[] rounded = new double[times.length];
+        for (int i = 0; i < times.length; i++) {
+            rounded[i] = Math.round(times[i] * 1000.0) / 1000.0;
+        }
+        return rounded;
     }
 
     private static void reportUnmatched(List<Paragraph> paragraphs, int from, int to, List<Cue> cues) {

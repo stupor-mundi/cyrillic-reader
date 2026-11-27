@@ -35,7 +35,8 @@ Example:
           "start": 34.402,
           "end": 47.836,
           "wordOffset": 0,
-          "words": [ { "text": "Отец", "start": 34.402, "end": 34.822 } ]
+          "words": [ { "text": "Отец", "start": 34.402, "end": 34.822 } ],
+          "wordStarts": [34.402, 34.822, 35.31]
         }
       ]
     }
@@ -45,22 +46,29 @@ are omitted.
 
 ## How it matches
 
-1. Text is lowercased and stripped of everything except letters.
-2. The segment's `startParagraph` (chapter heading) is searched for in the
-   transcript as an anchor; matching of the content starts after it.
-3. For each paragraph from `contentStartParagraph` to `endParagraph`, it scans up to 300
-   transcript words ahead of the current position for a start where the
-   paragraph's tokens match. A token matches a word if they are equal or have
-   Levenshtein distance of 2 or less (and a length difference of 3 or less).
-   The tokens of the next two paragraphs are used as lookahead.
-   Mismatches advance the transcript position (and the token position after
-   every 3 consecutive mismatches); 10 consecutive mismatches abandon the candidate start.
-4. A paragraph is accepted if at least 30% of its tokens matched.
-5. A match that starts more than 1 second before the previous cue ended is rejected.
-6. `wordOffset` is the index of the first matched paragraph token. The web
-   reader adds it to the index of the word in `words` to find the word span. It
-   is a patch for WhisperX dropping the first words of a paragraph, and does not
-   handle words dropped or merged in the middle.
+1. The segment's `startParagraph` (chapter heading) is searched for in the transcript as an anchor
+   (fuzzy match, Levenshtein distance 2 or less); the spoken preamble before it is skipped.
+2. All words of the paragraphs from `contentStartParagraph` to `endParagraph` are aligned to the
+   transcript words after the anchor in one order-preserving pass (weighted longest common
+   subsequence, `WordTimer.align`). Words are lowercased and reduced to letters, `ё` is folded to
+   `е`; equal words score 2, words of 4+ letters that differ by a few letters score 1, shorter
+   words only pair when equal. Because the alignment is global, a wrong match far from where a
+   paragraph belongs loses more than it gains, and cues never overlap or run backwards. (The old
+   per-paragraph scan could jump far ahead on a false match and then lose every paragraph it
+   skipped.)
+3. A paragraph's cue runs from its first to its last paired transcript word. Pairings that lie
+   more than 15 transcript words away from the rest of the paragraph are ignored (only the largest
+   group of close pairings counts). A paragraph gets a cue if at least 30% of its words were paired.
+4. `wordStarts` gives every whitespace-separated word of the paragraph's Cyrillic text (the
+   same split the web reader uses, so a standalone `—` counts) a start time. The paragraph words
+   are aligned again to the cue's transcript words; words without a heard counterpart (dashes,
+   dropped words) are interpolated between their neighbours. See `WordTimer`.
+5. `wordOffset` is the index of the first paired paragraph word. It is the old way for the web
+   reader to find a word span (`i + wordOffset` for `words[i]`); it drifts on dashes and on words
+   dropped or merged inside a paragraph. The reader only uses it for cues without `wordStarts`.
+
+The alignment table has one cell per (book word, transcript word); a segment over about 60 million
+cells (roughly 7,700 x 7,700 words) is refused with a message to split it.
 
 Diagnostics (unmatched paragraphs and match counts) are printed to stderr.
 

@@ -44,7 +44,7 @@ The only book so far is Pushkin, *The Captain's Daughter* (bookId `pushkin_kd`,
 4. **transcribe**: `python transcribe.py <mp3> <words/sNNN.json>`. WhisperX, model
    "medium", CPU, int8, language "ru". Slow: run once per chapter and keep the output.
 5. **align**: `words/sNNN.json` + `ru.json` + `audio_index.json` -> `cues/sNNN.json`.
-   Fuzzy matching (Levenshtein distance 2, lookahead over the next two paragraphs).
+   Chapter-wide ordered alignment of the book words to the transcript (since 2026-11-27; earlier: per-paragraph fuzzy scan, Levenshtein distance 2, lookahead over the next two paragraphs).
 6. **web**: loads all the JSON and plays the audio.
 
 ## Data formats
@@ -56,7 +56,7 @@ The only book so far is Pushkin, *The Captain's Daughter* (bookId `pushkin_kd`,
                       contentStartParagraph, endParagraph}]}
     words/sNNN.json  [{word, start, end}]
     cues/sNNN.json   {bookId, audioFile, cues:[{paragraphId, start, end, wordOffset,
-                      words:[{text, start, end}]}]}
+                      words:[{text, start, end}], wordStarts:[start per displayed word]}]}
 
 Paragraphs that don't match are omitted from the cues. The web app still renders them
 but never highlights them.
@@ -65,7 +65,8 @@ but never highlights them.
 
 - `audioSync.ts` listens to `timeupdate` and `seeked`, binary-searches the active cue, then
   finds the active word. It highlights spans by `data-paragraph-id` + `data-word-index`
-  in both the Cyrillic and the translit column, at index `i + wordOffset`.
+  in both the Cyrillic and the translit column, at the index found in the cue's `wordStarts`
+  (older cues without it: `i + wordOffset`).
 - Scrolling is a lerp driven by `requestAnimationFrame` (`LERP_FACTOR` 0.008) that follows
   the active word. Seeks jump instantly.
 - `.env.local` holds `VITE_BOOK_ID` (gitignored; `.env.example` is committed). Nothing
@@ -82,21 +83,27 @@ copied into the web app.
 
 **Main open problem: sync quality.** Match rates vary by chapter. Counted on 2026-11-27 from
 `ru.json` + `audio_index.json` + `cues/` (paragraphs between `contentStartParagraph` and
-`endParagraph` that have a cue): 491 of 593 overall (83%). Worst chapters: s011 (20 of 68
-unmatched), s013 (15 of 38), s012 (13 of 34), s008 (10 of 61). Best: s009 (1 of 31), s007 (2 of 16).
-Chapter 1 has 5 unmatched of 37 (an older note said 8, from an intermediate run); chapter 2 has 5 of 43,
-including ru-000040 (the first two words were dropped by WhisperX). The highlight sometimes lags the audio.
+`endParagraph` that have a cue): **before the 2026-11-27 matcher rewrite** 491 of 593 (83%), with about 10% of
+those cues more than 10 s off (runaway matches; worst chapters s011, s013, s012, s008). **After the rewrite
+(chapter-wide alignment) all 593 paragraphs have a cue** and none is more than 10 s from where an independent
+search of the transcript puts it. The audio itself is not abridged (word counts match `ru.txt` within 2%, s014
+6%); the old gaps were matcher failures. Residual risk: cues for paragraphs the transcript heard badly are
+approximate, and the new cues have not been listened to yet.
 
 ### Where timing goes wrong (suspects, most likely first)
 
-1. **Web layer.** `timeupdate` fires about 4 times a second and there is no lead offset,
-   so the highlight can trail the audio by up to about 250 ms.
+1. **Web layer (fixed 2026-11-27).** `timeupdate` fires about 4 times a second and there was no lead
+   offset, so the highlight could trail the audio by up to about 250 ms. Now driven by
+   `requestAnimationFrame` with a 120 ms lead (`?lead=` in the URL to tune). Not yet judged by ear.
 2. **Align, wrong words.** `wordOffset` only handles words dropped at the start of a
    paragraph. A word dropped, merged or split mid-paragraph shifts the rest of the paragraph.
-3. **Tokenization mismatch (suspected, not confirmed on real data).** `renderer.ts` makes
-   one span per whitespace-separated word, including standalone `—`; the aligner's
-   `normalizeAndTokenize` drops tokens that normalize to empty, so indices can drift.
-4. **Align, coverage.** Unmatched paragraphs get no cue, so nothing is highlighted there.
+3. **Tokenization mismatch (confirmed on real data 2026-11-27, fixed by `wordStarts`).**
+   `renderer.ts` makes one span per whitespace-separated word, including standalone `—`; the
+   transcript words never line up with those one to one. With the old `i + wordOffset` mapping
+   only 51% of words were highlighted within 0.3 s of their true time, 10% were more than 5 s
+   off (checked on 359 correctly placed cues). Skipping dashes alone would have given 72%.
+4. **Align, coverage and wrong cues (fixed 2026-11-27).** The old per-paragraph scan lost whole runs of
+   paragraphs after one false match far ahead; replaced by a chapter-wide alignment.
 
 WhisperX itself was fine. Early "0 matches" bugs were in the matching code. WhisperX
 mishears proper nouns (e.g. "Гринев" -> "горенев"), so the matcher must tolerate that.
@@ -136,10 +143,12 @@ copy the existing files aside before running a tool on a real book.
 
 ## Matcher and design history (decisions and dead ends)
 
-- **Current `align` parameters** (in `FuzzyMatcher.java` and `Aligner.java`): Levenshtein max distance 2, search window 300
-  transcript words, give up after more than 9 consecutive mismatches, accept a match when at least 30% of
-  the paragraph's tokens matched, lookahead into the next two paragraphs (used only to anchor; the lookahead
-  matches are discarded), a cheap guard that skips words whose lengths differ by more than 3, and a time guard.
+- **Current `align` method** (`Aligner.java`, `WordTimer.java`): the heading paragraph is found as an anchor with
+  the old fuzzy scan (`FuzzyMatcher.java`: Levenshtein 2, window 300); then the content range is aligned to the
+  transcript in one ordered pass (weighted LCS; exact 2, fuzzy 1; `ё` folded; short words only exact). A paragraph
+  gets a cue when at least 30% of its words are paired; pairings more than 15 transcript words from the rest of
+  the paragraph are dropped. *Replaced on 2026-11-27:* the per-paragraph scan with a 300-word window, 9-mismatch
+  cut-off, 2-paragraph lookahead and the 1 s time guard (it ran away on false matches; see PROGRESS.md).
 - **Rejected:** Soundex and Metaphone (English-specific); exact string matching; the first Python aligner
   (slow, because it re-transcribed on every run; plus the both-indices bug); a stub aligner that divided
   the audio duration evenly across paragraphs; `books/` and `ingest/` tools.
@@ -183,12 +192,11 @@ copy the existing files aside before running a tool on a real book.
 
 1. **Sync timing and alignment quality.**
    - Measure first: hand-time about 15 words per chapter; report median and worst error.
-   - Cheap web fix: drive the highlight from `requestAnimationFrame` reading
-     `audio.currentTime` instead of `timeupdate`, with a lead of about 100-150 ms.
-   - Replace the matcher with a chapter-wide sequence alignment of the book's words to the
-     transcript (Needleman-Wunsch style, fuzzy or phonetic similarity). Every book word
-     gets a time (interpolated where unheard), `wordOffset` goes away, and unmatched
-     paragraphs get approximate timing.
+   - Done 2026-11-27: highlight driven from `requestAnimationFrame` reading `audio.currentTime`, with a
+     lead of 0.12 s (tunable). Still to do: choose the final lead by listening.
+   - Done 2026-11-27: chapter-wide sequence alignment of the book's words to the transcript, and a
+     time for every book word (`wordStarts`, interpolated where unheard). `wordOffset` is only kept for
+     old cues. Still to do: phonetic similarity or an LLM pass for badly heard words.
    - Optionally refine with CTC forced alignment inside located paragraphs.
    - Use an LLM only for low-confidence paragraphs and for normalizing spoken forms
      (numbers, initials).

@@ -39,6 +39,8 @@ export interface Cue {
   readonly start: number;
   readonly end: number;
   readonly wordOffset?: number;
+  /** Start time of each whitespace-separated word of the paragraph's Cyrillic text, in order. */
+  readonly wordStarts?: readonly number[];
 }
 
 export interface CuesJson {

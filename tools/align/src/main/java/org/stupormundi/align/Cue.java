@@ -8,4 +8,6 @@ public class Cue {
     public double end;
     public int wordOffset;
     public List<CueWord> words;
+    /** Start time of each whitespace-separated word of the paragraph's Cyrillic text, in order. */
+    public double[] wordStarts;
 }

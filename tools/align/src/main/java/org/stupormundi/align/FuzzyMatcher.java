@@ -3,7 +3,10 @@ package org.stupormundi.align;
 import java.util.List;
 import org.apache.commons.text.similarity.LevenshteinDistance;
 
-/** Finds where a paragraph's tokens occur in the transcript words, tolerating recognition errors. */
+/**
+ * Finds where a paragraph's tokens occur in the transcript words, tolerating recognition errors. The
+ * aligner uses it only to locate the heading (anchor) paragraph; the content is aligned by {@link WordTimer}.
+ */
 final class FuzzyMatcher {
 
     private static final LevenshteinDistance LEVENSHTEIN = new LevenshteinDistance(2);

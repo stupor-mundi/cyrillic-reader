@@ -47,12 +47,17 @@ The book to load is set by `VITE_BOOK_ID`: copy `.env.example` to `.env.local`
 
 ## How sync works
 
-- `timeupdate` (fires about 4 times per second) and `seeked` drive
-  `attachAudioSync`. A binary search finds the active cue, then the active word.
+- While the audio plays, a `requestAnimationFrame` loop reads `audio.currentTime` every frame and
+  adds a lead (`DEFAULT_LEAD_SECONDS` = 0.12 s of wall-clock time, scaled by the playback speed) so the
+  highlight appears when the word is heard. Override it with `?lead=0.2` in the page URL to tune by ear.
+  The DOM is only touched when the active word changes. `seeked` updates at once; `timeupdate` (about
+  4 times per second) is only a fallback while the loop is not running (paused). A binary search finds
+  the active cue, then the active word.
 - The Cyrillic and transliteration columns are rendered as one `<span class="word">`
   per whitespace-separated word, with `data-paragraph-id` and `data-word-index`.
-  The active word is the cue's word `i`, highlighted as span `i + wordOffset`,
-  in both columns.
+  The cue's `wordStarts[k]` is the start time of span `k`; the active span is found by binary
+  search and highlighted in both columns. Cues without `wordStarts` (older data) fall back to
+  span `i + wordOffset` for the transcript word `i`, which drifts.
 - Scrolling follows the active word with a smoothed (lerp, factor 0.008)
   `requestAnimationFrame` loop; seeks scroll instantly.
 - Paragraphs without a cue are rendered but never highlighted.
@@ -69,7 +74,9 @@ Vite serves the app with hot reload; JSON and audio are served from `public/`.
 The static build works from `file://` without a server.
 
 1. Make sure `.env.local` sets `VITE_BOOK_ID`.
-2. Make sure `public/data/<bookId>/` contains `ru.json`, `en.json`, `chunks.json`,
+2. `public/data/<bookId>/` is a **separate copy** of the book data, not a link to the top-level `data/`.
+   After re-running `align` (or any other tool), copy the new files over, e.g.
+   `cp data/<bookId>/cues/s*.json web/public/data/<bookId>/cues/`. Make sure it contains `ru.json`, `en.json`, `chunks.json`,
    `audio_index.json` and all `cues/*.json`. `src/staticData.ts` bundles them at build time.
 3. Run `npm run build`.
 4. Open `dist/index.html` in a browser. Vite copies `public/` into `dist/`, so

@@ -153,27 +153,55 @@ class MainEndToEndTest {
     }
 
     @Test
-    void matchStartingMoreThanOneSecondBeforeThePreviousCueEndsIsRejected() throws IOException {
-        // The second paragraph's words are timed at 5-8 s, but the first cue already ends at 20 s.
-        String[] words = {"глава", "мой", "отец", "служил", "при", "графе", "минихе"};
-        double[][] times = {{0, 1}, {10, 11}, {11, 12}, {12, 20}, {5, 6}, {6, 7}, {7, 8}};
+    void aParagraphWithLongStretchesOfUnrecognisedWordsStillGetsItsCueAndDoesNotDisplaceTheNext()
+            throws IOException {
+        // Twelve unrecognised words in a row: the old scan gave up on such a paragraph and a later
+        // spurious match could then displace the paragraphs after it. The global alignment does not.
+        String bad = "щщщщщщщщщщщщщщ";
+        String[] words = {"глава",
+                "жили", "были", "дед", "да", "баба", "ели", bad, bad, bad, bad, bad, bad, bad, bad, bad,
+                bad, bad, bad, "кашу", "пили", "чай", "потом", "пришел", "кот", "серый", "хвостом", "махнул"};
         JsonNode result = align(
-                new String[] {"Глава", "Мой отец служил.", "При графе минихе."},
-                "ru-000001", "ru-000002", "ru-000003", times, words);
+                new String[] {"Глава", "Жили были дед да баба ели пирог с капустой и ещё кашу пили чай.",
+                        "Потом пришел кот серый.", "Хвостом махнул."},
+                "ru-000001", "ru-000002", "ru-000004", evenTimes(words.length), words);
+
+        assertEquals(List.of("ru-000002", "ru-000003", "ru-000004"), cueIds(result));
+        assertEquals(1.0, result.get("cues").get(0).get("start").asDouble());
+        assertEquals(22.0, result.get("cues").get(1).get("start").asDouble());
+        assertEquals(26.0, result.get("cues").get(2).get("start").asDouble());
+    }
+
+    @Test
+    void cuesNeverRunBackwardsBecauseParagraphsAreAlignedInOrder() throws IOException {
+        // The words of the second paragraph were spoken before those of the first in the transcript
+        // (a reordered recording): the later paragraph in the book cannot claim earlier audio.
+        // The first paragraph is the longer match, so it wins; the second one gets no cue.
+        String[] words = {"глава", "при", "графе", "минихе", "мой", "отец", "служил", "верно"};
+        JsonNode result = align(
+                new String[] {"Глава", "Мой отец служил верно.", "При графе минихе."},
+                "ru-000001", "ru-000002", "ru-000003", evenTimes(words.length), words);
 
         assertEquals(List.of("ru-000002"), cueIds(result));
     }
 
     @Test
-    void matchStartingExactlyOneSecondBeforeThePreviousCueEndsIsAccepted() throws IOException {
-        // Boundary of the time guard: start 19.0 is not below 20.0 - 1.0.
-        String[] words = {"глава", "мой", "отец", "служил", "при", "графе", "минихе"};
-        double[][] times = {{0, 1}, {10, 11}, {11, 12}, {12, 20}, {19.0, 19.2}, {19.2, 19.4}, {19.4, 19.6}};
+    void aFarAwayStrayMatchOfOneWordDoesNotStretchTheCue() throws IOException {
+        // "минихе" is also heard 30 words after the rest of the paragraph; that stray pairing is ignored.
+        List<String> words = new ArrayList<>(List.of("глава", "при", "графе"));
+        for (int i = 0; i < 30; i++) {
+            words.add("щщщщщщщщщщщщщщ");
+        }
+        words.add("минихе");
+        String[] wordArray = words.toArray(new String[0]);
         JsonNode result = align(
-                new String[] {"Глава", "Мой отец служил.", "При графе минихе."},
-                "ru-000001", "ru-000002", "ru-000003", times, words);
+                new String[] {"Глава", "При графе минихе."},
+                "ru-000001", "ru-000002", "ru-000002", evenTimes(wordArray.length), wordArray);
 
-        assertEquals(List.of("ru-000002", "ru-000003"), cueIds(result));
+        JsonNode cue = result.get("cues").get(0);
+        assertEquals(1.0, cue.get("start").asDouble());
+        assertEquals(2.5, cue.get("end").asDouble());
+        assertEquals(2, cue.get("words").size());
     }
 
     @Test

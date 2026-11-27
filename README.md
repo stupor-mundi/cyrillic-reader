@@ -215,13 +215,19 @@ To align all segments in a batch:
         "wordOffset": 0,
         "words": [
           { "text": "Отец", "start": 34.402, "end": 34.822 }
-        ]
+        ],
+        "wordStarts": [34.402, 34.822, 35.31]
       }
     ]
   }
 
-  wordOffset: number of leading paragraph tokens the transcript did not
-  contain; the web reader highlights span (i + wordOffset) for words[i].
+  wordStarts: one start time per whitespace-separated word of the paragraph's
+  Cyrillic text (the same split the web reader uses for its spans, so standalone
+  dashes count), non-decreasing. Words the transcript did not contain are
+  interpolated. The web reader highlights span k from wordStarts[k].
+  wordOffset (legacy, only used when wordStarts is missing): number of leading
+  paragraph tokens the transcript did not contain; the reader highlights span
+  (i + wordOffset) for words[i].
   Paragraphs with no match are omitted. The web app renders all
   paragraphs but only highlights matched ones.
 
@@ -231,7 +237,8 @@ To align all segments in a batch:
 
 Static TypeScript/Vite application. No backend required at runtime.
 
-Place all JSON and audio files under web/public/data/<bookId>/.
+Place all JSON and audio files under web/public/data/<bookId>/. This is a separate copy of the book
+data: after re-running a tool in data/<bookId>/, copy the changed files over (e.g. cues/*.json).
 Copy web/.env.example to web/.env.local and set VITE_BOOK_ID to the book ID.
 Run with: npm run dev
 

@@ -1,4 +1,4 @@
-import type { CuesJson } from "./types";
+import type { Cue, CuesJson } from "./types";
 
 export type ActiveChange = {
   paragraphId: string;
@@ -36,6 +36,49 @@ function findWordIndex(
   if (idx < 0) idx = 0;
   else if (idx >= words.length) idx = words.length - 1;
   return idx;
+}
+
+/** Index of the last time that is <= `time` in a non-decreasing list, clamped to the list. */
+function findStartIndex(starts: readonly number[], time: number): number {
+  let lo = 0;
+  let hi = starts.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (starts[mid] <= time) lo = mid + 1;
+    else hi = mid;
+  }
+  return Math.max(0, lo - 1);
+}
+
+/**
+ * Which word span of the cue's paragraph is being spoken at `time`, or -1 if unknown.
+ * Cues with `wordStarts` have one time per displayed word. Older cues only have the transcript
+ * words, which are mapped to spans by index plus `wordOffset` (this drifts, see PROJECT.md).
+ */
+function findSpanIndexForCue(cue: Cue, time: number): number {
+  if (cue.wordStarts && cue.wordStarts.length > 0) {
+    return findStartIndex(cue.wordStarts, time);
+  }
+  const words = (cue as Cue & { words?: readonly { start: number; end: number }[] }).words;
+  if (!words || words.length === 0) return -1;
+  const wordIndex = findWordIndex(words, time);
+  if (wordIndex < 0) return -1;
+  return wordIndex + (cue.wordOffset ?? 0);
+}
+
+/**
+ * How far ahead of the audio clock the highlight runs, in seconds of wall-clock time. It makes up for
+ * the delay between a sample being played and the frame showing it. Override with `?lead=0.2` in the
+ * page URL to tune it by ear (allowed range -0.5 to 1).
+ */
+const DEFAULT_LEAD_SECONDS = 0.12;
+
+function readLeadSeconds(): number {
+  const raw = new URLSearchParams(window.location.search).get("lead");
+  const value = raw === null ? NaN : parseFloat(raw);
+  return Number.isFinite(value) && value >= -0.5 && value <= 1
+    ? value
+    : DEFAULT_LEAD_SECONDS;
 }
 
 let lerpTarget: number | null = null;
@@ -97,6 +140,10 @@ export function attachAudioSync(opts: {
   let lastActiveChunkId: string | null = null;
   let lastActiveWordSpan: HTMLElement | null = null;
   let justSeeked = false;
+  const leadSeconds = readLeadSeconds();
+  let syncFrameId: number | null = null;
+  let lastAppliedCue = -1;
+  let lastAppliedSpan = -2;
 
   function getActiveCueIndex(time: number): number {
     if (cues.length === 0) return -1;
@@ -117,6 +164,11 @@ export function attachAudioSync(opts: {
   function applyActive(cueIndex: number, time: number, instant = false): void {
     if (cueIndex < 0 || cueIndex >= cues.length) return;
     const cue = cues[cueIndex];
+    const spanIndex = findSpanIndexForCue(cue, time);
+    // Called every frame: do nothing (and touch no DOM) while the same word stays active.
+    if (cueIndex === lastAppliedCue && spanIndex === lastAppliedSpan) return;
+    lastAppliedCue = cueIndex;
+    lastAppliedSpan = spanIndex;
     const chunkId = ruToChunk.get(cue.paragraphId);
     if (chunkId == null) return;
     const el = getChunkElById(chunkId);
@@ -143,11 +195,7 @@ export function attachAudioSync(opts: {
         cueIndex,
       });
 
-    const cueWithWords = cue as typeof cue & {
-      words?: readonly { start: number; end: number }[];
-    };
-    const words = cueWithWords.words;
-    if (!words || words.length === 0) {
+    if (spanIndex < 0) {
       if (chunkChanged) {
         if (instant) scrollToElInstant(el);
         else scrollToEl(el);
@@ -155,19 +203,8 @@ export function attachAudioSync(opts: {
       return;
     }
 
-    const wordIndex = findWordIndex(words, time);
-    if (wordIndex < 0) {
-      if (chunkChanged) {
-        if (instant) scrollToElInstant(el);
-        else scrollToEl(el);
-      }
-      return;
-    }
-
-    const offset = cue.wordOffset ?? 0;
-    const offsetIndex = wordIndex + offset;
     const allSpans = document.querySelectorAll<HTMLElement>(
-      `.word[data-paragraph-id="${cue.paragraphId}"][data-word-index="${offsetIndex}"]`
+      `.word[data-paragraph-id="${cue.paragraphId}"][data-word-index="${spanIndex}"]`
     );
 
     // Remove from previous
@@ -192,28 +229,74 @@ export function attachAudioSync(opts: {
     }
   }
 
-  function onTimeUpdate(): void {
-    const cueIndex = getActiveCueIndex(audio.currentTime);
+  /** Audio time the highlight should show: the clock plus the lead, scaled by the playback speed. */
+  function highlightTime(): number {
+    return audio.currentTime + leadSeconds * audio.playbackRate;
+  }
+
+  function tick(): void {
+    const time = highlightTime();
+    const cueIndex = getActiveCueIndex(time);
     if (cueIndex >= 0) {
-      applyActive(cueIndex, audio.currentTime, justSeeked);
+      applyActive(cueIndex, time, justSeeked);
     }
     justSeeked = false;
   }
 
+  function frame(): void {
+    tick();
+    syncFrameId = requestAnimationFrame(frame);
+  }
+
+  function startFrames(): void {
+    if (syncFrameId === null) syncFrameId = requestAnimationFrame(frame);
+  }
+
+  function stopFrames(): void {
+    if (syncFrameId !== null) {
+      cancelAnimationFrame(syncFrameId);
+      syncFrameId = null;
+    }
+  }
+
+  /** Fallback: while the frame loop is not running (paused, or seeking while paused) the coarse
+   * `timeupdate` event still keeps the highlight right. */
+  function onTimeUpdate(): void {
+    if (syncFrameId === null) tick();
+  }
+
   function onSeeked(): void {
     justSeeked = true;
-    const time = audio.currentTime;
+    const time = highlightTime();
     currentCueIndex = Math.max(0, binarySearchCueIndex(cues, time));
     applyActive(currentCueIndex, time, true);
   }
 
+  function onPlay(): void {
+    startFrames();
+  }
+
+  function onPauseOrEnd(): void {
+    stopFrames();
+    tick(); // show the exact final position
+  }
 
   audio.addEventListener("timeupdate", onTimeUpdate);
   audio.addEventListener("seeked", onSeeked);
+  audio.addEventListener("play", onPlay);
+  audio.addEventListener("playing", onPlay);
+  audio.addEventListener("pause", onPauseOrEnd);
+  audio.addEventListener("ended", onPauseOrEnd);
+  if (!audio.paused) startFrames();
 
   return function detach(): void {
     audio.removeEventListener("timeupdate", onTimeUpdate);
     audio.removeEventListener("seeked", onSeeked);
+    audio.removeEventListener("play", onPlay);
+    audio.removeEventListener("playing", onPlay);
+    audio.removeEventListener("pause", onPauseOrEnd);
+    audio.removeEventListener("ended", onPauseOrEnd);
+    stopFrames();
     if (rafId !== null) {
       cancelAnimationFrame(rafId);
       rafId = null;

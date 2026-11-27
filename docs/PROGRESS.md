@@ -7,8 +7,10 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
 ## Next / blocked on the other machine
 
 - `[laptop]` Measure sync error (hand-time about 15 words per chapter) before changing the aligner.
-- `[laptop]` Check the renderer vs aligner token count mismatch (standalone `—` etc.) on real data.
-- `[laptop]` Web: drive highlight from `requestAnimationFrame` + small lead instead of `timeupdate`.
+- `[laptop]` Listen-check the new `wordStarts` (sample about 15 words per chapter); the automated check
+  agrees with the aligner by construction, so it is not independent proof.
+- `[laptop]` Listen to the reader and tune the highlight lead (`?lead=0.05` ... `?lead=0.25` in the URL); set
+  `DEFAULT_LEAD_SECONDS` in `web/src/audioSync.ts` to what feels right.
 - `[idle]` Small safe fixes (see "Open small tasks").
 - Undecided: a parent pom (`tools/pom.xml`) for shared Java and plugin versions. Leaning against it for now (the four
   poms are short and were just aligned). Revisit if more tools are added or the poms drift again; the clean moment
@@ -26,6 +28,43 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
 - Transliteration show/hide toggle.
 
 ## Log
+
+### 2026-11-27 `[laptop]` (per-word times, matcher rewrite, rAF highlight)
+
+- **rAF highlight (last step of the day):** `web/src/audioSync.ts` runs a `requestAnimationFrame` loop while the
+  audio plays, reads `audio.currentTime + lead` (lead 0.12 s wall-clock, scaled by playback speed, `?lead=`
+  overrides), and only touches the DOM when the active word changes. `timeupdate` stays as a paused fallback.
+  Browser check (dev server, 8 s of playback): 76 of 78 samples had exactly the word the cue data predicts,
+  the other 2 were one word off (sampling race), no gaps, highlight stable when paused.
+- **Found:** `web/public/data/<bookId>/` is a separate, stale copy of the data (March), so the reader was still
+  using the old cues. The new `cues/*.json` were copied in (that copy equalled the original backup before the
+  copy). Re-copy after every `align` run.
+
+- **Finding: the audio is not abridged.** Per chapter the transcript has 1.00-1.02x the words of `ru.txt`
+  (s014 1.06x), and every "missing" paragraph checked in s011/s012/s013 is in the audio, in order. The
+  unmatched paragraphs and wrong cues come from *runaway matches*: one false match far ahead (e.g. s013
+  `ru-000521` placed at 6.7 min, really at 3.8) moves the search position past the following paragraphs.
+  This corrects the earlier "audio skips" reading of s011-s013.
+- **WhisperX vs the book text:** 91.5-96% exact word agreement; most of the rest is spelling (`всё`/`все`,
+  `Кузмич`/`Кузьмич`, `Андреич`/`Андреевич`, `Марья`/`Мария`, `ё`), few real errors.
+- **Confirmed web-tier drift:** `i + wordOffset` highlighted only 51% of words within 0.3 s, 10% more than 5 s
+  off (standalone `—` spans are never spoken, plus dropped/merged words).
+- **Fix:** new `WordTimer` in `tools/align`; each cue gets `wordStarts` (one start time per whitespace word of
+  the Cyrillic text, interpolated where unheard). `web/src/audioSync.ts` uses it, falling back to the old
+  mapping for cues without it. `types.ts`, `README.md`, `tools/align/README.md`, `web/README.md`, `PROJECT.md`
+  updated. 14 new tests (80 total). `golden-check.sh` now ignores `wordStarts` and needs `jq`; matching is
+  unchanged on all 14 chapters.
+- **Data:** `data/pushkin_kd/cues/` regenerated in place (new field only; old fields identical). Backup of the
+  previous cues: `data/pushkin_kd/cues.bak-20261127/`.
+- Still open: listen-check of the new timings.
+- **Matcher rewrite (same day):** `Aligner` now aligns the whole content range to the transcript in one ordered
+  pass (`WordTimer.align`, weighted LCS) instead of scanning per paragraph. Result on `pushkin_kd`: 593 of 593
+  paragraphs have a cue (was 491), no cue more than 10 s from where an independent search puts it (was 10%
+  of cues), no overlaps beyond 0.02 s, whole book aligns in about 6 s. `FuzzyMatcher` is now only used to find
+  the heading anchor. Tests: the 1 s time-guard tests were replaced by three tests of the new behaviour (82
+  total). `data/pushkin_kd/cues/` regenerated in place; `cues.bak-20261127/` still holds the original cues.
+  The 3-10 s band in my independent check is mostly long paragraphs where the check itself is biased, not
+  confirmed errors.
 
 ### 2026-11-27 `[laptop]` (align characterization tests and refactor)
 

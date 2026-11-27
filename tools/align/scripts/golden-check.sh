@@ -3,14 +3,16 @@
 #
 # Copies ru.json, audio_index.json and words/ from <dataDir>/<bookId> into a temp directory, runs the
 # built align jar on every segment there, and compares the produced cues byte for byte with the
-# existing <dataDir>/<bookId>/cues/. Nothing under <dataDir> is modified (it is only read), and the
+# existing <dataDir>/<bookId>/cues/. Fields added to the cues later (currently `wordStarts`) are left out
+# of the comparison, so it checks that the matching itself did not change. Nothing under <dataDir> is modified (it is only read), and the
 # temp directory is removed at the end.
 #
 # Usage: tools/align/scripts/golden-check.sh <dataDir> <bookId>
 #   e.g. tools/align/scripts/golden-check.sh data pushkin_kd
-# Build the jar first: (cd tools/align && mvn -q clean package)
+# Needs jq. Build the jar first: (cd tools/align && mvn -q clean package)
 #
-# Run this before and after a refactor of tools/align. It needs the real data, so it only works on the
+# Run this before and after a refactor of tools/align. (After a deliberate change of the matching, the
+# comparison fails; review the differences, regenerate data/<bookId>/cues/ and it passes again.) It needs the real data, so it only works on the
 # machine that has it. Never commit its temp output (it holds timestamps derived from the audio).
 set -euo pipefail
 
@@ -38,7 +40,8 @@ diff_count=0
 for words_file in "$src"/words/s*.json; do
   seg=$(basename "$words_file" .json)
   java -jar "$jar" "$tmp" "$book_id" "$seg" 2>/dev/null
-  if cmp -s "$tmp/$book_id/cues/$seg.json" "$src/cues/$seg.json"; then
+  if cmp -s <(jq -S 'del(.cues[].wordStarts)' "$tmp/$book_id/cues/$seg.json") \
+            <(jq -S 'del(.cues[].wordStarts)' "$src/cues/$seg.json"); then
     same=$((same + 1))
   else
     diff_count=$((diff_count + 1))
