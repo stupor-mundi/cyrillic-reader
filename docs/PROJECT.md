@@ -26,7 +26,8 @@ The only book so far is Pushkin, *The Captain's Daughter* (bookId `pushkin_kd`,
     docs/             this file and PROGRESS.md
 
 - Java tools are called as `java -jar X.jar <dataDir> <bookId> [segmentId]`.
-- Base Java package: `org.stupormundi.*`. Each tool keeps all its logic in one `Main.java`.
+- Base Java package: `org.stupormundi.*`. `Main` is only the CLI; the logic is split into small classes
+  per tool, with JUnit 5 tests (`mvn test`).
 - The text tool is `textprep` in this repo (an older name was `translit`).
 - Per-tool details are in each tool's README. The root README has the pipeline overview.
 
@@ -135,7 +136,7 @@ copy the existing files aside before running a tool on a real book.
 
 ## Matcher and design history (decisions and dead ends)
 
-- **Current `align` parameters** (read from `Main.java`): Levenshtein max distance 2, search window 300
+- **Current `align` parameters** (in `FuzzyMatcher.java` and `Aligner.java`): Levenshtein max distance 2, search window 300
   transcript words, give up after more than 9 consecutive mismatches, accept a match when at least 30% of
   the paragraph's tokens matched, lookahead into the next two paragraphs (used only to anchor; the lookahead
   matches are discarded), a cheap guard that skips words whose lengths differ by more than 3, and a time guard.
@@ -166,8 +167,9 @@ copy the existing files aside before running a tool on a real book.
   (e.g. "Дорожные размышления"), so the highlight ran behind. The aligner records the number
   of leading paragraph tokens not matched. It is a patch, not a fix.
 - **Matcher history.** Started as exact equality in Python, rewritten in Java, now
-  Levenshtein plus lookahead. Mismatches must only advance the transcript index, not the
-  token index (a real past bug). The Python aligner is gone.
+  Levenshtein plus lookahead. A single mismatch must only advance the transcript index,
+  not the token index (a real past bug). The current code also advances the token index on every third
+  consecutive mismatch (locked in by `FuzzyMatcherTest`). The Python aligner is gone.
 - **Python environment.** WhisperX/torch broke on Python 3.14. Use a venv on Python 3.12.
   A torchcodec warning is harmless.
 - **Copyright.** The Pushkin text is public domain. The audio came from deti-online.com
@@ -190,8 +192,9 @@ copy the existing files aside before running a tool on a real book.
    - Optionally refine with CTC forced alignment inside located paragraphs.
    - Use an LLM only for low-confidence paragraphs and for normalizing spoken forms
      (numbers, initials).
-2. **Java refactor + tests.** JUnit 5 tests locking current behaviour first, then split
-   the big `Main.java` files.
+2. **Java refactor + tests.** Done for `textprep`, `segment`, `chunk` and `align` (tests locked current
+   behaviour first, then `Main.java` was split). For `align`, run `tools/align/scripts/golden-check.sh`
+   after any change to compare against existing cues on the laptop.
 3. **UI ideas** (after good alignment): translit show/hide toggle; fading translit of
    spoken words; a fixed "karaoke bar" with the current word large.
 4. **A demo:** a screen recording (the audio can't be shared) or a separate pre-built

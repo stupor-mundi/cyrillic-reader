@@ -27,6 +27,42 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
 
 ## Log
 
+### 2026-11-27 `[laptop]` (align characterization tests and refactor)
+
+- Added tests to `tools/align` first (42), then refactored; now 66 tests, all pass. All use invented
+  text and invented timings; no book data. Test classes: `TextNormalizerTest`, `FuzzyMatcherIsMatchTest`,
+  `FuzzyMatcherTest` (17), `MainEndToEndTest` (9: cue timings, anchor paragraph, time guard incl. its boundary,
+  unmatched paragraphs, `wordOffset`, unescaped Cyrillic), `InputLoaderTest` (13), `MainErrorTest` (11, every
+  error message), plus the smoke test.
+- Split the 439-line `Main.java` into: `Main` (CLI, exit codes, writes the file), `Aligner` (anchor search,
+  paragraph loop, time guard, cue building, diagnostics), `FuzzyMatcher` (`isMatch`, `fuzzyMatch`,
+  `MatchResult`), `TextNormalizer`, `InputLoader` (words, `ru.json`, `audio_index.json`), `ParagraphIndex`,
+  `AlignException`, and the model classes `Word`, `Paragraph`, `Segment`, `Cue`, `CueWord`, `CuesResult`.
+- Behaviour unchanged: after every step `mvn test` passed and `golden-check.sh` showed 14 of 14 cue files
+  byte-identical to the existing ones; the jar's usage and missing-file messages and exit code 1 are the same.
+  One intended difference: the `System.exit` error paths in the logic are now an `AlignException` that
+  `Main.main` turns into "print message, exit 1", so they can be tested. `Main.run(dataDir, bookId, segmentId)`
+  is the testable entry point.
+- Visibility: `FuzzyMatcher`, `TextNormalizer`, `InputLoader` and `Aligner` are package-private.
+- Added `tools/align/scripts/golden-check.sh <dataDir> <bookId>`: copies `ru.json`, `audio_index.json` and
+  `words/` to a temp dir, runs the jar on every segment, compares the cues byte for byte with `data/.../cues/`.
+  It only reads `data/`. Result on `pushkin_kd`: **14 of 14 identical** to the existing cues, so the current
+  code reproduces the cues from 13 March exactly. Run it before and after every refactor step.
+- Findings that the tests lock in (quirks, not endorsements):
+  - On every third consecutive mismatch the matcher also advances the token index (`PROJECT.md` used to say
+    mismatches only advance the transcript index). A paragraph whose first word is missing from the
+    transcript is not recovered: the matching words are consumed as mismatches and the paragraph is
+    unmatched. `wordOffset > 0` appears only when about three unrelated transcript words stand in for a
+    dropped token.
+  - For a one-token paragraph a scan ends after three mismatches; the search window is 300 words for scan
+    starts, not for the first matching word.
+  - Any two words of up to two letters match (max distance 2), so short words ("он", "я", "в") match almost
+    anything. A suspect for wrong matches and bad `wordOffset`.
+  - The time guard rejects a match starting more than 1.0 s before the previous cue ends (exactly 1.0 s is accepted).
+- Next for `align`: simulated-ASR-error tests (fake timings, corrupt like WhisperX, compare with truth), then
+  the matcher rewrite. Keep running `golden-check.sh`; once the matcher changes on purpose it will report
+  differences, and then it tells how many cues moved.
+
 ### 2026-11-27 `[laptop]` (history recovered from the author's browser Claude project)
 
 - Docs only. Added "Data and manual work" and "Matcher and design history" sections to `docs/PROJECT.md`
