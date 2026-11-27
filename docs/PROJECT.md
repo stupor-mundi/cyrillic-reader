@@ -79,9 +79,12 @@ but never highlights them.
 Everything works end to end: all 14 chapters were transcribed and aligned, and the cues
 copied into the web app.
 
-**Main open problem: sync quality.** Match rates vary by chapter (chapter 2: 38 of 43
-paragraphs matched; chapter 1: 8 unmatched, mostly short dialogue). The highlight
-sometimes lags the audio.
+**Main open problem: sync quality.** Match rates vary by chapter. Counted on 2026-11-27 from
+`ru.json` + `audio_index.json` + `cues/` (paragraphs between `contentStartParagraph` and
+`endParagraph` that have a cue): 491 of 593 overall (83%). Worst chapters: s011 (20 of 68
+unmatched), s013 (15 of 38), s012 (13 of 34), s008 (10 of 61). Best: s009 (1 of 31), s007 (2 of 16).
+Chapter 1 has 5 unmatched of 37 (an older note said 8, from an intermediate run); chapter 2 has 5 of 43,
+including ru-000040 (the first two words were dropped by WhisperX). The highlight sometimes lags the audio.
 
 ### Where timing goes wrong (suspects, most likely first)
 
@@ -96,6 +99,66 @@ sometimes lags the audio.
 
 WhisperX itself was fine. Early "0 matches" bugs were in the matching code. WhisperX
 mishears proper nouns (e.g. "Гринев" -> "горенев"), so the matcher must tolerate that.
+
+## Data and manual work (lives outside the repo)
+
+The example book's inputs and outputs are in `data/<bookId>/`, which is gitignored and has no backup
+in git. Treat it as precious. Do not delete, overwrite or regenerate anything there without asking, and
+copy the existing files aside before running a tool on a real book.
+
+- **Hand-made inputs** (cannot be regenerated): `ru.txt` and `en.txt`. `ru.txt` was cut down by hand from the
+  raw Wikisource export (`ru (orig).txt`): front matter, page-number lines, editor footnotes ("— Ред."), the
+  editor's epilogue and the appendix "Пропущенная глава" were removed. Chapter epigraphs were also removed
+  (this caused some matching trouble; not recorded whether they were put back). Chapter headings stay as
+  standalone paragraphs ("Глава I…", "ГЛАВА II…"): `segment` needs them. `en.txt` is the English
+  Wikisource text ("Russian Romance" translation, per the file name) with front matter and translator
+  footnotes removed and 14 headings normalised to `CHAPTER N. TITLE.`; the translation body is unchanged
+  (checked against the raw export). `ru_small.json` and `en_small.json` are small slices made to smoke-test `chunk`.
+- **Never hand-edited** (as far as known): `ru.json`, `en.json`, `chunks.json`, `audio_index.json`,
+  `words/`, `cues/`. All tool output. Mixed-case chapter titles ("Глава I…" vs "ГЛАВА II…") come from the
+  source headings; `segment` detects headings case-insensitively and copies them.
+- **Safe re-run order:** `textprep` -> `chunk` -> `segment` -> `align`. Changing `ru.txt` or the paragraph
+  splitting renumbers paragraphs, which invalidates `chunks.json`, `audio_index.json` and the cues.
+  `words/` depends only on the MP3 files and their order, not on `ru.json`: run `transcribe` again only if the
+  audio changes.
+- **Cost of each step** (estimates from file timestamps and the history, not measured): `textprep`, `segment`,
+  `align`: seconds to about two minutes for the whole book. `transcribe`: roughly 6-11 minutes per chapter on
+  CPU (about 100 minutes for 13 chapters). `chunk`: hours with 429 backoff, and it costs API money.
+- **Audio** (file names `01_glava-1-serzhant-gvardii.mp3` ... `14_glava-14-sud.mp3`) maps by sorted order to
+  `s001`-`s014`. No trimming or merging is recorded. The audio speaks extras that are not in the text (author,
+  title, a proverb, "Глава первая", the chapter title, the epigraph; chapter 2 starts with "Дорожные
+  размышления"). The aligner skips this by starting at the chapter-heading paragraph (`startParagraph`).
+  An `entryHint` field was proposed and never implemented.
+- **Stray file:** `tools/transcribe/01_glava-1-serzhant-gvardii.json` (untracked, has per-word scores) is raw
+  WhisperX CLI output from a manual test on chapter 1. `words/s001.json` has no scores, so it came from
+  `transcribe.py`. Keep it, do not commit it.
+
+## Matcher and design history (decisions and dead ends)
+
+- **Current `align` parameters** (read from `Main.java`): Levenshtein max distance 2, search window 300
+  transcript words, give up after more than 9 consecutive mismatches, accept a match when at least 30% of
+  the paragraph's tokens matched, lookahead into the next two paragraphs (used only to anchor; the lookahead
+  matches are discarded), a cheap guard that skips words whose lengths differ by more than 3, and a time guard.
+- **Rejected:** Soundex and Metaphone (English-specific); exact string matching; the first Python aligner
+  (slow, because it re-transcribed on every run; plus the both-indices bug); a stub aligner that divided
+  the audio duration evenly across paragraphs; `books/` and `ingest/` tools.
+- **Decided:** Java for the text-heavy tools (the author already used Maven, IntelliJ and Jackson); Python only
+  for WhisperX; one `Main.java` per tool at first (works well with Cursor), refactor later; `wordOffset`
+  instead of padding the words array, because it keeps the real timestamps; `.env.local` instead of a
+  `config.json`; `staticData.ts` is committed as application code; `data-paragraph-id` selectors (an
+  earlier `data-chunk-id` selector highlighted several paragraphs at once).
+- **WhisperX settings:** `medium`, CPU, `int8` (`float16` failed on CPU), language `ru`. No other model or
+  audio source was tried; a larger model or GPU was only suggested.
+- **`chunk` history:** model `claude-3-5-sonnet-latest` returned 404, now `claude-sonnet-4-6`; org limit 30k
+  input tokens per minute; 429 backoff of 15 s then 30 s; defaults were 80 RU / 150 EN lookahead, now about
+  60 RU (55-65 allowed) and 120 EN, with a 10-paragraph RU and 15-paragraph EN overlap.
+- **`textprep` cleanup order:** strip `[n]` markers, format characters and BOM, space variants, CRLF, split on
+  blank lines, split paragraphs over 1200 characters (`MAX_PARAGRAPH_CHARS`).
+- **Static build also needs:** all 14 cue files present for `import.meta.glob`, and the `justSeeked` flag that
+  suppresses the slow scroll after a seek. The scroll `LERP_FACTOR` was 0.04 before it became 0.008 (the reason
+  is not recorded).
+- **Unverified:** the audio source (deti-online.com) was judged "almost certainly under copyright" and was
+  not verified; one LibriVox check found no Russian recording of this book; no other source was checked.
 
 ## Insights not visible in the code
 

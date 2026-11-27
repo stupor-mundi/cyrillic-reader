@@ -27,6 +27,26 @@ Each entry: what changed, which files, what is still open. Read `PROJECT.md` fir
 
 ## Log
 
+### 2026-11-27 `[laptop]` (history recovered from the author's browser Claude project)
+
+- Docs only. Added "Data and manual work" and "Matcher and design history" sections to `docs/PROJECT.md`
+  (what in `data/` is hand-made and must be kept, safe re-run order, run costs, matcher parameters, decisions
+  and dead ends). Replaced the old "chapter 1: 8 unmatched" note with real per-chapter match counts computed
+  from `ru.json` + `audio_index.json` + `cues/` (491 of 593 paragraphs, worst: s011, s013, s012, s008).
+- Nothing under `data/` was changed. No tool was run against `pushkin_kd`.
+- Open question: a claim in the history that a `segment` change requires re-transcribing looks wrong
+  (`words/` depends only on the MP3s). Not verified by running anything.
+
+### 2026-11-27 `[laptop]` (align JUnit setup)
+
+- `tools/align/pom.xml`: added JUnit 5 (5.11.4, test scope) and Surefire 3.5.2, same as the other tools.
+  Added `MainSmokeTest` under `src/test/java/org/stupormundi/align/`. `mvn clean package` passes and the jar builds.
+- System `mvn` (3.10.0, Java 21) is now installed on the laptop. Verified `mvn test` passes in `textprep` (21),
+  `segment` (14) and `chunk` (57). All four poms are now consistent (parent pom decision still open).
+- Open: `align` has only a smoke test. Next is simulated-ASR-error tests before changing the matcher.
+- Still untracked: `web/package.json`, `web/package-lock.json`, `web/tsconfig.json` (to add), and the stray
+  `tools/transcribe/01_glava-1-serzhant-gvardii.json` (audio-derived, do not commit).
+
 ### 2026-11-26 `[idle]` (Java test setup)
 
 - Fixed root `.gitignore`: removed the global `*.json` rule that hid `web/package.json` and
